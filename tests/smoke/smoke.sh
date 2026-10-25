@@ -93,6 +93,14 @@ rest_embed_no_author() {
   ! grep -q '"_embedded":{"author"' <<<"$body" && ! grep -q 'mf_codespark_qa' <<<"$body"
 }
 file_edit_disabled() { [ "$(wp eval 'echo (int) DISALLOW_FILE_EDIT;' | tail -n1 | tr -d '\r')" = 1 ]; }
+redirect_hook_live() {
+  local f=wp-content/mu-plugins/zz-codespark-qa-redirect.php loc code
+  printf '%s\n' '<?php' "add_filter('mf_redirects_extra', static fn (\$m) => \$m + ['/codespark-qa-old/' => '/']);" > "$f"
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/Codespark-QA-Old?utm_source=qa")"
+  loc="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 20 "$BASE/codespark-qa-old/")"
+  rm -f "$f"
+  [ "$code" = 301 ] && [ "$loc" = "$BASE/" ]
+}
 
 # ---- checks ----
 check       home_200         status_is / 200
@@ -110,6 +118,7 @@ check_local trackback_closed       trackback_closed
 check       users_sitemap_gone     users_sitemap_gone
 check_local rest_embed_no_author   rest_embed_no_author
 check_local file_edit_disabled     file_edit_disabled
+check_local redirect_hook_live      redirect_hook_live
 
 # ---- summary ----
 echo "Summary: $PASSES passed, $FAILS failed, $SKIPS skipped"

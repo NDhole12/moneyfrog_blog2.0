@@ -21,6 +21,7 @@ if (defined('WP_CLI') && WP_CLI) {
 
 \MoneyfrogCore\Hardening::register();
 \MoneyfrogCore\CommentsOff::register();
+\MoneyfrogCore\RedirectHooks::register();
 
 // Marker header on REST responses, used by the smoke tests.
 add_filter('rest_post_dispatch', static function ($response) {
