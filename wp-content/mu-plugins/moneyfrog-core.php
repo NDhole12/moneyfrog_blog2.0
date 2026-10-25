@@ -29,6 +29,7 @@ if (defined('WP_CLI') && WP_CLI) {
 \MoneyfrogCore\ContentHooks::register();
 \MoneyfrogCore\ServiceUser::register();
 \MoneyfrogCore\Release::register();
+\MoneyfrogCore\AdminBrand::register();
 
 // Marker header on REST responses, used by the smoke tests.
 add_filter('rest_post_dispatch', static function ($response) {

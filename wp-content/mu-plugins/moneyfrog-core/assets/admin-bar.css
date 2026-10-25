@@ -1,0 +1,5 @@
+/* Moneyfrog admin bar mark. */
+#wpadminbar #wp-admin-bar-mf-home > .ab-item { display: flex; align-items: center; gap: 6px; }
+#wpadminbar #wp-admin-bar-mf-home .mf-frog { width: 18px; height: 18px; border-radius: 4px; }
+.mf-dash-links { margin: 0 0 12px; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.mf-dash-links a { font-weight: 600; }

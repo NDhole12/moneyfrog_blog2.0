@@ -1,0 +1,50 @@
+@import url("/wp-admin/css/colors/modern/colors.css");
+
+/* Moneyfrog admin colour scheme: ink menu, gold-ink highlight, gold notifications, cream surfaces.
+   Layered over the core "modern" scheme so every control still has its base styling. */
+:root, body {
+  --wp-admin-theme-color: #8a6a1f;
+  --wp-admin-theme-color--rgb: 138, 106, 31;
+  --wp-admin-theme-color-darker-10: #7a5c17;
+  --wp-admin-theme-color-darker-10--rgb: 122, 92, 23;
+  --wp-admin-theme-color-darker-20: #6a4f13;
+  --wp-admin-theme-color-darker-20--rgb: 106, 79, 19;
+}
+body { background: #f9f8f4; }
+a { color: #8a6a1f; }
+a:hover, a:active, a:focus { color: #16191d; }
+
+/* Menu */
+#adminmenuback, #adminmenuwrap, #adminmenu { background: #16191d; }
+#adminmenu a { color: #e7e2d8; }
+#adminmenu div.wp-menu-image::before { color: #c29a2c; }
+#adminmenu li.menu-top:hover, #adminmenu li.opensub > a.menu-top, #adminmenu li > a.menu-top:focus { background: #23282e; color: #fff; }
+#adminmenu li.menu-top:hover div.wp-menu-image::before, #adminmenu li > a.menu-top:focus div.wp-menu-image::before { color: #e3c66a; }
+#adminmenu li.current a.menu-top, #adminmenu li.wp-has-current-submenu a.wp-has-current-submenu, #adminmenu .wp-has-current-submenu .wp-submenu .wp-submenu-head { background: #8a6a1f; color: #fff; }
+#adminmenu li.current div.wp-menu-image::before, #adminmenu li.wp-has-current-submenu div.wp-menu-image::before { color: #fff; }
+#adminmenu .wp-submenu, #adminmenu .wp-has-current-submenu .wp-submenu, #adminmenu a.wp-has-current-submenu:focus + .wp-submenu { background: #0b0f14; }
+#adminmenu .wp-submenu a { color: #c9cdd2; }
+#adminmenu .wp-submenu a:hover, #adminmenu .wp-submenu a:focus, #adminmenu .wp-submenu li.current a { color: #e3c66a; }
+#adminmenu .awaiting-mod, #adminmenu .update-plugins, #adminmenu li.current a .awaiting-mod, #adminmenu li a.wp-has-current-submenu .update-plugins { background: #c29a2c; color: #16191d; }
+#collapse-button, #collapse-button:hover { color: #c9cdd2; }
+#adminmenu li a:focus div.wp-menu-image::before { color: #e3c66a; }
+
+/* Admin bar */
+#wpadminbar { background: #16191d; color: #e7e2d8; }
+#wpadminbar .ab-item, #wpadminbar a.ab-item, #wpadminbar > #wp-toolbar span.ab-label, #wpadminbar > #wp-toolbar span.noticon { color: #e7e2d8; }
+#wpadminbar .ab-icon::before, #wpadminbar .ab-item::before, #wpadminbar #adminbarsearch::before { color: #c29a2c; }
+#wpadminbar:not(.mobile) .ab-top-menu > li:hover > .ab-item, #wpadminbar:not(.mobile) .ab-top-menu > li > .ab-item:focus, #wpadminbar .menupop .ab-sub-wrapper { background: #23282e; color: #e3c66a; }
+#wpadminbar .ab-submenu, #wpadminbar .quicklinks .menupop ul.ab-sub-secondary { background: #0b0f14; }
+#wpadminbar .quicklinks .menupop .ab-sub-wrapper .ab-item { color: #c9cdd2; }
+#wpadminbar .quicklinks .menupop .ab-sub-wrapper a:hover { color: #e3c66a; }
+
+/* Buttons and notices */
+.wp-core-ui .button-primary { background: #8a6a1f; border-color: #8a6a1f; color: #fff; }
+.wp-core-ui .button-primary:hover, .wp-core-ui .button-primary:focus { background: #7a5c17; border-color: #7a5c17; color: #fff; }
+.wp-core-ui .button, .wp-core-ui .button-secondary { color: #8a6a1f; border-color: #8a6a1f; }
+.wp-core-ui .button:hover, .wp-core-ui .button-secondary:hover { color: #16191d; border-color: #16191d; }
+.notice-info, .update-nag { border-left-color: #c29a2c; }
+.wrap .page-title-action, .wrap .add-new-h2 { color: #8a6a1f; border-color: #8a6a1f; }
+.wp-core-ui .button:focus, a:focus, input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 2px #8a6a1f; outline: 2px solid transparent; }
+.postbox .hndle, .postbox .postbox-header .hndle { color: #16191d; }
+.postbox { border-color: #e7e2d8; }

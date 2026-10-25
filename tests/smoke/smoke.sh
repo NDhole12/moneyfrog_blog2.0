@@ -216,6 +216,17 @@ category_page() {
   [ "$(http_status "/category/mutual-funds/?order=asc&tag=sip")" = 200 ] || return 1
   curl -s --max-time 20 "$BASE/category/mutual-funds/?order=asc" | grep -q 'class="pagination"'
 }
+admin_branded() {
+  wp eval '
+    require_once ABSPATH . WPINC . "/class-wp-admin-bar.php";
+    $bar = new WP_Admin_Bar();
+    do_action_ref_array("admin_bar_menu", [&$bar]);
+    $ok = $bar->get_node("wp-logo") === null && $bar->get_node("mf-home") !== null;
+    $ok = $ok && str_contains(apply_filters("admin_footer_text", ""), "Moneyfrog Insights");
+    $ok = $ok && apply_filters("get_user_option_admin_color", false, "admin_color", null) === "moneyfrog";
+    $ok = $ok && apply_filters("get_user_option_admin_color", "midnight", "admin_color", null) === "midnight" && apply_filters("get_user_option_admin_color", "modern", "admin_color", null) === "moneyfrog";
+    echo $ok ? "ADMIN_BRANDED_OK" : "ADMIN_BRANDED_FAIL";' </dev/null 2>/dev/null | grep -q ADMIN_BRANDED_OK
+}
 login_branded() {
   local h; h="$(curl -s --max-time 20 "$BASE/wp-login.php")"
   grep -q 'assets/css/login.css' <<<"$h" && grep -q 'moneyfrog-logo.svg' <<<"$h" || return 1
@@ -473,6 +484,7 @@ check_local cover_for_no_image cover_for_no_image
 check_local category_page      category_page
 check_local search_works       search_works
 check_local login_branded      login_branded
+check_local admin_branded      admin_branded
 check       category_tag_pills_use_names category_tag_pills_use_names
 check       newsletter_hidden  newsletter_hidden
 check       advisor_cta        advisor_cta
