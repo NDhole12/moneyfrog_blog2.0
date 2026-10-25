@@ -4,50 +4,131 @@ import { ALLOWLIST, isAllowedHost } from './allowlist.mjs';
 
 const GAMBLING = /\b(casino|betting|sportsbook|poker|slot machine|jackpot|bonus code|freispiele|wett)/i;
 const GERMAN_STOPWORDS = new Set(['und', 'der', 'die', 'das', 'nicht', 'sich', 'mit', 'für', 'ist', 'eine', 'wie', 'zum']);
-const HIDDEN_STYLE = [
-  /display\s*:\s*none/i,
-  /visibility\s*:\s*hidden/i,
-  /font-size\s*:\s*0(?:\.0+)?(?:px|em|rem|pt|%)?\s*(?:;|!|$)/i,
-  /(?:left|top|right|bottom|text-indent)\s*:\s*-\d{3,}/i,
-];
 const YOUTUBE_HOSTS = ['www.youtube.com', 'youtube.com', 'www.youtube-nocookie.com', 'youtube-nocookie.com'];
+const SCRIPT_LIKE = new Set(['script', 'style', 'object', 'embed', 'noscript', 'applet', 'template']);
+const ALLOWED_TAGS = sanitizeHtml.defaults.allowedTags.concat(['img', 'iframe', 'figure', 'figcaption', 'span', 'h1', 'h2']);
+const ALLOWED_TAG_SET = new Set(ALLOWED_TAGS);
+const JUDGED_BLOCKS = 'p,li,div,td,th,h1,h2,h3,h4,h5,h6,blockquote,dd,dt,figcaption';
+const ANY_BLOCK = `${JUDGED_BLOCKS},ul,ol,table,thead,tbody,tfoot,tr,dl,section,article,aside,header,footer,nav,figure,pre,form,details,summary,main`;
+const WHITE = new Set(['white', '#fff', '#ffffff', 'rgb(255,255,255)']);
 
 const excerpt = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 120);
 
-function germanStopwordCount(text) {
-  const words = text.toLowerCase().match(/[a-zäöüß]+/g) ?? [];
-  return words.filter((w) => GERMAN_STOPWORDS.has(w)).length;
+function germanSignal(text) {
+  const words = (text.toLowerCase().match(/[a-zäöüß]+/g) ?? []).filter((w) => GERMAN_STOPWORDS.has(w));
+  return words.length >= 3 && new Set(words).size >= 2;
 }
 
-function hostOf(href) {
+function parseUrl(href) {
   try {
-    const u = new URL(href, 'https://placeholder.invalid');
-    if (u.hostname === 'placeholder.invalid') return null; // relative
-    return /^https?:$/.test(u.protocol) ? u.hostname : null;
+    return new URL(String(href).trim(), 'https://placeholder.invalid');
   } catch {
     return null;
   }
 }
 
-const isOutbound = (href, allow) => {
-  const host = hostOf(href);
-  return host !== null && !isAllowedHost(host, allow);
+/** 'ok' (relative, mailto, tel, or on-list web host), 'outbound' (off-list web host), 'unsafe' (other scheme). */
+function classifyHref(href, allow) {
+  const u = parseUrl(href);
+  if (!u) return 'unsafe';
+  if (u.protocol === 'mailto:' || u.protocol === 'tel:') return 'ok';
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return 'unsafe';
+  if (u.hostname === 'placeholder.invalid') return 'ok';
+  return isAllowedHost(u.hostname, allow) ? 'ok' : 'outbound';
+}
+
+function normaliseCss(s) {
+  return s
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_, h) => {
+      const cp = parseInt(h, 16);
+      return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '\u{fffd}';
+    })
+    .replace(/\\(.)/g, '$1')
+    .toLowerCase()
+    .replace(/\s+/g, '');
+}
+
+function parseDecls(style) {
+  const out = {};
+  for (const part of normaliseCss(style).split(';')) {
+    const i = part.indexOf(':');
+    if (i > 0) out[part.slice(0, i)] = part.slice(i + 1).replace(/!important$/, '');
+  }
+  return out;
+}
+
+const isZero = (v) => v !== undefined && /^[0-9.]/.test(v) && parseFloat(v) === 0;
+const negAtLeast = (v, n) => {
+  const m = /^-(\d*\.?\d+)/.exec(v ?? '');
+  return Boolean(m) && parseFloat(m[1]) >= n;
 };
 
+function hiddenByStyle(d) {
+  if (d.display === 'none') return true;
+  if (d.visibility === 'hidden' || d.visibility === 'collapse') return true;
+  if (isZero(d.opacity)) return true;
+  if (isZero(d['font-size'])) return true;
+  const clipped = [d.overflow, d['overflow-x'], d['overflow-y']].includes('hidden');
+  if (clipped && ['height', 'width', 'max-height', 'max-width'].some((p) => isZero(d[p]))) return true;
+  if (/^rect\(0/.test(d.clip ?? '') || /^inset\(100%/.test(d['clip-path'] ?? '')) return true;
+  if (['absolute', 'fixed'].includes(d.position) && ['left', 'top', 'right', 'bottom'].some((p) => negAtLeast(d[p], 50))) return true;
+  if (negAtLeast(d['text-indent'], 999)) return true;
+  return false;
+}
+
+const whiteTextNoBackground = (d) =>
+  WHITE.has(d.color ?? '') && !('background' in d) && !('background-color' in d) && !('background-image' in d);
+
+function attached(el, root) {
+  let n = el;
+  while (n.parent) n = n.parent;
+  return n === root;
+}
+
 /**
- * Pure: sanitises WordPress post HTML. Returns cleaned html plus a log of what
- * was removed and what was flagged for human review.
+ * Pure: sanitises WordPress post HTML. Returns cleaned html plus a log of every
+ * removal and a list of items flagged for human review.
  */
 export function sanitize(html, { allow = ALLOWLIST } = {}) {
   const removed = [];
   const flags = [];
   const $ = cheerio.load(String(html ?? ''), null, false);
+  const root = $.root()[0];
+  const live = (el) => attached(el, root);
 
-  $('script, style, object, embed').each((_, el) => {
-    removed.push({ kind: 'script', detail: el.tagName });
-    $(el).remove();
+  // 0. Protocol-relative URLs -> https so allowed ones survive the final pass.
+  $('a[href], iframe[src], img[src]').each((_, el) => {
+    const attr = el.tagName === 'a' ? 'href' : 'src';
+    const v = (el.attribs[attr] ?? '').trim();
+    if (v.startsWith('//')) el.attribs[attr] = `https:${v}`;
   });
 
+  // 1. Hidden content first, so descendants of a removed node are never logged again.
+  $('*').each((_, el) => {
+    if (!live(el)) return;
+    const a = el.attribs ?? {};
+    const d = parseDecls(a.style ?? '');
+    const text = $(el).text();
+    const ariaHiddenSpam =
+      a['aria-hidden'] === 'true' && text.trim() !== '' && (el.tagName === 'a' || $(el).find('a[href]').length > 0);
+    if ('hidden' in a || ariaHiddenSpam || hiddenByStyle(d)) {
+      removed.push({ kind: 'hidden', detail: `${el.tagName}: ${excerpt(text)}` });
+      $(el).remove();
+    } else if (whiteTextNoBackground(d) && text.trim() !== '') {
+      flags.push({ kind: 'hidden-colour', excerpt: excerpt(text) });
+    }
+  });
+
+  // 2. Script-like elements.
+  $('*').each((_, el) => {
+    if (live(el) && SCRIPT_LIKE.has(el.tagName)) {
+      removed.push({ kind: 'script', detail: el.tagName });
+      $(el).remove();
+    }
+  });
+
+  // 3. Event-handler attributes.
   $('*').each((_, el) => {
     for (const name of Object.keys(el.attribs ?? {})) {
       if (/^on/i.test(name)) {
@@ -57,56 +138,84 @@ export function sanitize(html, { allow = ALLOWLIST } = {}) {
     }
   });
 
-  $('[hidden], [style]').each((_, el) => {
-    if (!el.parent) return;
-    const style = el.attribs?.style ?? '';
-    if ('hidden' in (el.attribs ?? {}) || HIDDEN_STYLE.some((re) => re.test(style))) {
-      removed.push({ kind: 'hidden', detail: `${el.tagName}: ${excerpt($(el).text())}` });
-      $(el).remove();
-    }
-  });
-
+  // 4. Iframes: YouTube only; every other src is logged.
   $('iframe').each((_, el) => {
     const src = el.attribs?.src ?? '';
-    const host = hostOf(src.startsWith('//') ? `https:${src}` : src);
-    if (!host || !YOUTUBE_HOSTS.includes(host.toLowerCase())) {
+    const u = parseUrl(src);
+    const ok = u && u.protocol === 'https:' && YOUTUBE_HOSTS.includes(u.hostname);
+    if (!ok) {
       removed.push({ kind: 'iframe', detail: src });
       $(el).remove();
     }
   });
 
-  // Paragraph-level spam check (before links are unwrapped so they can be judged).
-  $('p, li').each((_, el) => {
-    if (!el.parent) return;
-    if (el.tagName === 'li' && $(el).children('p').length) return; // judged via its <p>
+  // 4b. Images with non-web sources.
+  $('img[src]').each((_, el) => {
+    if (classifyHref(el.attribs.src, allow) === 'unsafe') {
+      removed.push({ kind: 'link', detail: el.attribs.src.slice(0, 120) });
+      $(el).remove();
+    }
+  });
+
+  // 5. Judge every leaf text block (innermost block wins).
+  const judged = [];
+  const blocks = $(JUDGED_BLOCKS).toArray().concat($.root().children('span').toArray());
+  for (const el of blocks) {
+    if (!live(el) || $(el).find(ANY_BLOCK).length > 0) continue;
     const text = $(el).text();
-    const hasKeyword = GAMBLING.test(text);
-    const german = germanStopwordCount(text) >= 3;
+    if (text.trim() === '') continue;
+    const german = germanSignal(text);
+    const keyword = GAMBLING.test(text);
     const badLink = $(el)
       .find('a[href]')
       .toArray()
-      .some((a) => isOutbound(a.attribs.href, allow));
-    // Also remove German text carrying an off-list link even without a gambling term
-    // (real-world injections name the brand only in the link text).
-    if ((hasKeyword && (badLink || german)) || (german && badLink)) {
+      .some((a) => classifyHref(a.attribs.href, allow) === 'outbound');
+    // R26: (gambling AND off-list link AND german) OR (german AND off-list link) reduces to german AND off-list link.
+    if (german && badLink) {
       removed.push({ kind: 'paragraph', detail: excerpt(text) });
       $(el).remove();
-      return;
+      continue;
     }
-    if (german) flags.push({ kind: 'non-english', excerpt: excerpt(text) });
-    if (hasKeyword) flags.push({ kind: 'keyword', excerpt: excerpt(text) });
-  });
+    const mine = [];
+    if (german) mine.push({ kind: 'non-english', excerpt: excerpt(text) });
+    if (keyword) mine.push({ kind: 'keyword', excerpt: excerpt(text) });
+    if (mine.length) judged.push({ el, flags: mine });
+  }
 
+  // 6. R25 contagion: spam found in this item taints its other non-English blocks.
+  const spamFound = removed.some((r) => r.kind === 'paragraph');
+  for (const j of judged) {
+    if (spamFound && live(j.el) && j.flags.some((f) => f.kind === 'non-english')) {
+      removed.push({ kind: 'paragraph', detail: `contagion: ${excerpt($(j.el).text())}` });
+      $(j.el).remove();
+    } else {
+      flags.push(...j.flags);
+    }
+  }
+
+  // 7. Links: unsafe schemes and off-list hosts are unwrapped (text kept) and logged.
   $('a[href]').each((_, el) => {
-    const href = el.attribs.href;
-    if (isOutbound(href, allow)) {
-      removed.push({ kind: 'link', detail: href });
+    if (classifyHref(el.attribs.href, allow) !== 'ok') {
+      removed.push({ kind: 'link', detail: el.attribs.href.slice(0, 200) });
       $(el).replaceWith($(el).contents());
     }
   });
 
+  // 8. Tags the final whitelist would silently drop.
+  $('*').each((_, el) => {
+    if (!ALLOWED_TAG_SET.has(el.tagName)) removed.push({ kind: 'tag', detail: el.tagName });
+  });
+
+  // 9. Style attributes: one summary entry for the item.
+  let styleCount = 0;
+  $('[style]').each((_, el) => {
+    styleCount += 1;
+    $(el).removeAttr('style');
+  });
+  if (styleCount > 0) removed.push({ kind: 'style', detail: `${styleCount} style attribute(s) dropped` });
+
   const clean = sanitizeHtml($.root().html() ?? '', {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'iframe', 'figure', 'figcaption', 'span', 'h1', 'h2']),
+    allowedTags: ALLOWED_TAGS,
     allowedAttributes: {
       '*': ['class', 'id', 'title', 'lang'],
       a: ['href', 'name', 'target', 'rel'],
