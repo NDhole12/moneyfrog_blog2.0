@@ -20,8 +20,9 @@
   dropdowns.forEach(function (item) {
     var btn = item.querySelector('button');
     if (!btn) { return; }
-    btn.addEventListener('click', function () {
-      var open = !item.classList.contains('is-open');
+    btn.addEventListener('click', function (e) {
+      /* A mouse click on a menu already opened by hover keeps it open; Enter/Space toggle. */
+      var open = e.detail > 0 ? true : !item.classList.contains('is-open');
       closeDropdowns(item);
       setDropdown(item, open);
     });
@@ -29,6 +30,20 @@
 
   document.addEventListener('click', function (e) {
     if (!e.target.closest('[data-dropdown]')) { closeDropdowns(null); }
+  });
+
+  /* Tabbing out of an open menu closes it. */
+  dropdowns.forEach(function (item) {
+    item.addEventListener('focusout', function (e) {
+      if (!e.relatedTarget || !item.contains(e.relatedTarget)) { setDropdown(item, false); }
+    });
+    /* Hover reveals the menu through the same state, so aria-expanded never disagrees. */
+    item.addEventListener('pointerenter', function (e) {
+      if (e.pointerType === 'mouse') { closeDropdowns(item); setDropdown(item, true); }
+    });
+    item.addEventListener('pointerleave', function (e) {
+      if (e.pointerType === 'mouse' && !item.contains(document.activeElement)) { setDropdown(item, false); }
+    });
   });
 
   /* ---- Drawer with focus trap ---- */

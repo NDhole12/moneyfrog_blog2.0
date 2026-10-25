@@ -3,7 +3,7 @@
 /* ---------- Top bar ---------- */
 .topbar { background: var(--topbar); font: 400 10px/32px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
 .topbar .wrap { display: flex; justify-content: space-between; gap: 24px; white-space: nowrap; overflow: hidden; }
-.topbar strong { font-weight: 500; color: var(--gold-ink); }
+.topbar strong { font-weight: 500; color: var(--gold-ink-strong); }
 
 /* ---------- Header ---------- */
 .site-header { position: sticky; top: 0; z-index: 50; background: rgba(249, 248, 244, .92); border-bottom: 1px solid var(--line); backdrop-filter: saturate(1.2) blur(10px); -webkit-backdrop-filter: saturate(1.2) blur(10px); }
@@ -27,9 +27,6 @@
 }
 .nav__menu::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
 .nav__item.is-open > .nav__menu { opacity: 1; visibility: visible; transform: none; }
-@media (hover: hover) {
-  .nav__item:hover > .nav__menu { opacity: 1; visibility: visible; transform: none; }
-}
 .nav__menu a { display: block; padding: 9px 12px; border-radius: 8px; font-size: 14px; line-height: 1.35; color: var(--ink-2); }
 .nav__menu a:hover { background: var(--band); color: var(--ink); }
 .header-actions { display: flex; align-items: center; gap: 10px; margin-left: 6px; padding-left: 22px; border-left: 1px solid var(--line-2); }

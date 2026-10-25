@@ -43,6 +43,7 @@
   --ink: #16191d;
   --ink-2: #4c525a;
   --gold-ink: #8a6a1f;
+  --gold-ink-strong: #7a5c17; /* 4.89:1 on --topbar; for small text on the top bar */
   --gold: #c29a2c;
   --gold-soft: #e3c66a;
   --btn-ink: #241b05;
