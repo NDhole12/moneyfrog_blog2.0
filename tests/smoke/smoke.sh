@@ -101,6 +101,30 @@ redirect_hook_live() {
   rm -f "$f"
   [ "$code" = 301 ] && [ "$loc" = "$BASE/" ]
 }
+core_author_archive_hidden() {
+  local id
+  id="$(sample_post_id)"
+  [ "${id:-0}" != 0 ] || return 1
+  # Give the sample post to the admin login so the archive is not 404 merely for being empty.
+  wp eval '$u = get_user_by("login", "mf_codespark_qa"); wp_update_post(["ID" => '"$id"', "post_author" => $u->ID]);' >/dev/null 2>&1 || return 1
+  [ "$(http_status /author/mf_codespark_qa/)" = 404 ] && [ "$(http_status /wp-user/mf_codespark_qa/)" = 404 ]
+}
+byline_archive() {
+  local id html
+  id="$(sample_post_id)"
+  [ "${id:-0}" != 0 ] || return 1
+  wp eval '
+    if (!term_exists("codespark-qa", "mf_byline")) { wp_insert_term("Codespark QA", "mf_byline", ["slug" => "codespark-qa"]); }
+    wp_set_object_terms('"$id"', ["codespark-qa"], "mf_byline");' >/dev/null 2>&1 || return 1
+  [ "$(http_status /author/codespark-qa/)" = 200 ] || return 1
+  html="$(curl -s --max-time 20 "$BASE/author/codespark-qa/")"
+  grep -q 'Codespark QA sample' <<<"$html"
+}
+byline_rest_no_user_data() {
+  local body
+  body="$(curl -s --max-time 20 "$BASE/wp-json/wp/v2/mf_byline")"
+  grep -q '"slug":"codespark-qa"' <<<"$body" && ! grep -q 'mf_codespark_qa' <<<"$body" && ! grep -q '"author"' <<<"$body"
+}
 
 # ---- checks ----
 check       home_200         status_is / 200
@@ -119,6 +143,9 @@ check       users_sitemap_gone     users_sitemap_gone
 check_local rest_embed_no_author   rest_embed_no_author
 check_local file_edit_disabled     file_edit_disabled
 check_local redirect_hook_live      redirect_hook_live
+check_local core_author_archive_hidden core_author_archive_hidden
+check_local byline_archive          byline_archive
+check_local byline_rest_no_user_data byline_rest_no_user_data
 
 # ---- summary ----
 echo "Summary: $PASSES passed, $FAILS failed, $SKIPS skipped"
