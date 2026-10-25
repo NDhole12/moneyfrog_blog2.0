@@ -177,7 +177,22 @@ nav_links_to_site() {
   grep -q 'href="https://moneyfrog.in/login"' <<<"$h" && grep -q 'href="https://moneyfrog.in/signup"' <<<"$h"
 }
 footer_registration() {
-  home_html | grep -qF 'Moneyfrog Financial Services Private Limited | CIN: U66000MH2011PTC216613 | AMFI Registered Mutual Fund Distributor: ARN 94798 | IRDAI Registered Corporate Agent: CA0450'
+  # Two lines, exactly as on moneyfrog.in (tags stripped; the "|" separators are aria-hidden spans).
+  local t; t="$(home_html | tr '
+' ' ' | sed 's#<[^>]*>##g' | tr -s ' ')"
+  grep -qF 'Moneyfrog Financial Services Private Limited | CIN: U66000MH2011PTC216613 | GSTIN: 27AAJCA5151G1ZR AMFI Registered Mutual Fund Distributor: ARN 94798 | IRDAI Registered Corporate Agent: CA0450' <<<"$t"
+}
+# Visible text of the blog's <header>/<footer> must equal the reference markup saved from the live site.
+LIVE_REF=tests/fixtures/live
+visible_text() { # $1 = tag (header|footer); stdin = html
+  tr '\n' ' ' | sed "s#.*\(<$1 class=\"[a-z-]*\"[^>]*>.*\)#\1#; s#</$1>.*#</$1>#" | sed 's#<[^>]*>##g; s/&amp;/\&/g; s/&rsquo;/'"'"'/g; s/&#0*39;/'"'"'/g; s/&copy;/(c)/g; s/20[0-9][0-9]/YYYY/g' | tr -s ' \t' ' ' | sed 's/^ //; s/ $//'
+}
+header_footer_match_live() {
+  local part
+  for part in header footer; do
+    [ "$(home_html | visible_text "$part")" = "$(visible_text "$part" < "$LIVE_REF/live-$part.html")" ] || return 1
+  done
+  ! home_html | grep -q 'class="topbar"'
 }
 not_found_themed() {
   [ "$(http_status /codespark-qa-missing/)" = 404 ] && curl -s --max-time 20 "$BASE/codespark-qa-missing/" | grep -q 'class="blog-bar"'
@@ -433,6 +448,7 @@ check       gtm_present           gtm_present
 check       no_google_fonts       no_google_fonts
 check       nav_links_to_site     nav_links_to_site
 check       footer_registration   footer_registration
+check_local header_footer_match_live header_footer_match_live
 check       404_themed            not_found_themed
 
 check_local home_sections      home_sections

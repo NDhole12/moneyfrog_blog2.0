@@ -1,5 +1,5 @@
 <?php
-/** Site shell top: top bar, moneyfrog.in header + drawer, blog bar. */
+/** Site shell top: moneyfrog.in header + drawer, blog bar. */
 
 if (!defined('ABSPATH')) {
     exit;
@@ -37,13 +37,6 @@ $nav  = [
 <?php wp_body_open(); ?>
 <?php mf_icons_sprite(); ?>
 <a class="skip-link" href="#main">Skip to content</a>
-
-<div class="topbar">
-    <div class="wrap">
-        <span>AMFI-registered Mutual Fund Distributor &middot; <strong>ARN 94798</strong></span>
-        <span>IRDAI Corporate Agent &middot; <strong>CA0450</strong></span>
-    </div>
-</div>
 
 <header class="site-header" id="top">
     <div class="wrap">

@@ -42,7 +42,7 @@ $legal = [
                     </p>
                     <p class="footer__line">
                         <?php echo mf_icon('i-whatsapp', 'icon icon--fill'); ?>
-                        <a href="https://wa.me/919004675553" target="_blank" rel="noopener">+91 90046 75553<span class="sr-only"> (opens in a new tab)</span></a>
+                        <a href="https://wa.me/919004675553" target="_blank" rel="noopener">+91 90046 75553</a>
                     </p>
                     <p class="footer__line">
                         <?php echo mf_icon('i-mail'); ?>
@@ -112,11 +112,12 @@ $legal = [
                 <?php endforeach; ?>
             </nav>
             <div class="footer__regs">
-                <p class="footer__reg">Moneyfrog Financial Services Private Limited | CIN: U66000MH2011PTC216613 | AMFI Registered Mutual Fund Distributor: ARN 94798 | IRDAI Registered Corporate Agent: CA0450</p>
+                <p class="footer__reg">Moneyfrog Financial Services Private Limited <span aria-hidden="true">|</span> CIN: U66000MH2011PTC216613 <span aria-hidden="true">|</span> GSTIN: 27AAJCA5151G1ZR</p>
+                <p class="footer__reg">AMFI Registered Mutual Fund Distributor: ARN 94798 <span aria-hidden="true">|</span> IRDAI Registered Corporate Agent: CA0450</p>
             </div>
             <div class="footer__notice">
                 <p class="footer__office">Corporate Office: MONEYFROG FINANCIAL SERVICES, 723 &amp; 724, 7th Floor, Swastik Chambers, SG Barve Marg, Chembur, Mumbai, Maharashtra 400071</p>
-                <p class="footer__disclaimer">Mutual Fund Disclaimer: Mutual Fund investments are subject to market risks. Please read all scheme related documents carefully before investing. Past performance is not an indicator of future returns. Insurance Disclaimer: Insurance is a subject matter of the solicitation. For more details on policy terms, conditions, exclusions, limitations, please refer/read policy brochure carefully before concluding sale. Moneyfrog&rsquo;s regulatory registrations, certifications, and official credentials are available under <a href="<?php echo esc_url($site('/registrations-certifications')); ?>">Registrations &amp; Certifications</a>.</p>
+                <p class="footer__disclaimer">Mutual Fund Disclaimer: Mutual Fund investments are subject to market risks. Please read all scheme related documents carefully before investing. Past performance is not an indicator of future returns. Insurance Disclaimer: Insurance is a subject matter of the solicitation. For more details on policy terms, conditions, exclusions, limitations, please refer/read policy brochure carefully before concluding sale. Moneyfrog's regulatory registrations, certifications, and official credentials are available under <a href="<?php echo esc_url($site('/registrations-certifications')); ?>">Registrations &amp; Certifications</a>.</p>
             </div>
             <p class="footer__copy">&copy; <?php echo esc_html(gmdate('Y')); ?> Moneyfrog Financial Services Private Limited. All rights reserved.</p>
         </div>
