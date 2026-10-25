@@ -9,20 +9,27 @@ A runbook for a shared Linux host (CloudLinux, Apache, per-docroot PHP handler, 
 | `<ACCOUNT_HOME>` | the hosting account's home directory |
 | `<STAGING_ROOT>` / `<LIVE_ROOT>` | docroot of staging / live (becomes `STAGING_ROOT` / `LIVE_ROOT` in `infra/.env.deploy`) |
 | `<PHP83_BIN>` | the PHP 8.3 CLI binary on the server (cPanel hosts: `/opt/cpanel/ea-php83/root/usr/bin/php`) |
-| `<WP_PATH>` `<COMPOSER_PATH>` | the `wp` and `composer` executables on the server (`command -v wp`, `command -v composer`) |
+| `<WP_PATH>` | the `wp` executable on the server (`command -v wp`) |
+| `<COMPOSER_PHAR>` | the real `composer.phar` (`composer` on PATH may be a shell wrapper; read it to find the phar) |
+| `<RELEASES_DIR>` | absolute directory for release builds, **outside every web root** (becomes `RELEASES_DIR` in `infra/.env.deploy`) |
+| `<HANDLER>` | the Apache PHP handler name that works for the docroot, e.g. `application/x-httpd-alt-php83___lsphp` |
 | `<DB_NAME>` `<DB_USER>` | new database and its least-privilege user |
 | `<ADMIN_LOGIN>` | administrator login chosen by the owner (**never `admin`**) |
 
 Rules that apply throughout: the old blog and the existing sites on this account are never touched, the account's PHP version for other sites never changes, and nothing here is run until the owner has approved the account.
 
-**PHP 8.3 for every command.** The server's default `php` may be older than 8.3. On the server, every session starts with:
+**PHP 8.3 and enough memory for every command.** The server's default `php` may be older than 8.3, and the CLI `memory_limit` on shared hosts is often 128M, which makes `wp core download` fail **silently** (the archive extractor runs out of memory) and Composer die on large installs. On the server, every session starts with:
 
 ```sh
-WP='<PHP83_BIN> <WP_PATH>'
-COMPOSER='<PHP83_BIN> <COMPOSER_PATH>'
+WP='<PHP83_BIN> -d memory_limit=512M <WP_PATH>'
+COMPOSER='<PHP83_BIN> -d memory_limit=1536M <COMPOSER_PHAR>'
 ```
 
-and every `wp` / `composer` command below is written `$WP ...` / `$COMPOSER ...`. For `infra/deploy.sh` set `REMOTE_PATH_PREFIX` in `.env.deploy` to the directory holding the 8.3 `php`. It is **required** whenever the server's default `php` is below 8.3: the deploy's version gate and `php -l` call plain `php` from PATH (as do `wp` and `composer`), so without it the deploy stops at the gate. `WP_BIN` / `COMPOSER_BIN` are optional overrides.
+and every `wp` / `composer` command below is written `$WP ...` / `$COMPOSER ...`. Use the real phar for Composer: on cPanel hosts `composer` on PATH is typically a shell wrapper that ignores the options you pass to `php`.
+
+For `infra/deploy.sh` put the same commands in `.env.deploy`: `WP_BIN='<PHP83_BIN> -d memory_limit=512M <WP_PATH>'` and `COMPOSER_BIN='<PHP83_BIN> -d memory_limit=1536M <COMPOSER_PHAR>'` (the remote shell word-splits them). Also set `REMOTE_PATH_PREFIX` to the directory holding the 8.3 `php`: it is **required** whenever the default `php` is below 8.3, because the deploy's version gate and `php -l` call plain `php` from PATH.
+
+**CageFS note (CloudLinux).** Remote commands run inside a jailed shell. Do not rely on process substitution (`<(...)`) in anything run over ssh: it fails there with `/dev/fd/NN: No such file or directory`. `deploy.sh` lints with a temp file instead, counts the files it linted, and **refuses to apply** if it linted 0 files or any file fails `php -l`. A deploy log must show `linted <n> files` with `n` greater than 0.
 
 ## 0. Prerequisites (local)
 
@@ -49,15 +56,38 @@ Compare those fingerprints **out of band** with the ones the hosting provider sh
 
 ## 2. PHP 8.3 for this docroot only
 
-The panel's PHP selector is unavailable, so the handler is chosen per docroot in `<STAGING_ROOT>/.htaccess` (first lines):
+The panel's PHP selector is unavailable, so the handler is chosen per docroot in `<STAGING_ROOT>/.htaccess` (first lines). On CloudLinux the handlers Apache actually serves are the `alt-php` ones, `application/x-httpd-alt-phpNN___lsphp`, and the ea4 default (e.g. `ea-php84`); the plain `application/x-httpd-ea-php83` name is **not served** there and makes Apache return the raw PHP source. Use:
 
 ```apache
 <IfModule mime_module>
-  AddHandler application/x-httpd-ea-php83 .php
+  AddHandler <HANDLER> .php .php8 .phtml
 </IfModule>
 ```
 
-Verification happens after step 6 (the web handler) and with the CLI now: `<PHP83_BIN> -v` must print 8.3.x. No `phpinfo` page is ever created.
+with, for example, `<HANDLER>` = `application/x-httpd-alt-php83___lsphp`.
+
+**Discover which handlers exist** (do not guess): `/etc/cpanel/ea4/php.conf` names the ea4 default PHP, and the CloudLinux alternatives are the directories under `/opt/alt/` (`ls -d /opt/alt/php*`; `php83` means `alt-php83`). Pick the 8.3 one.
+
+**Verify through the web, not the CLI** (the CLI can be 8.3 while the web handler is not). WordPress is not installed yet, so use a throw-away probe file and delete it immediately:
+
+```sh
+printf '<?php echo "ok";' > <STAGING_ROOT>/mf-probe.php
+curl -sI https://<STAGING_HOST>/mf-probe.php | grep -i '^x-powered-by'    # must print PHP/8.3.x
+curl -s  https://<STAGING_HOST>/mf-probe.php                              # must print: ok (a body starting with <?php means the handler name is wrong)
+rm <STAGING_ROOT>/mf-probe.php
+```
+
+Also `<PHP83_BIN> -v` must print 8.3.x. No `phpinfo` page is ever created. Once WordPress is installed the header is intentionally gone (next section), so confirm the version there with `$WP eval 'echo PHP_VERSION;'` plus a working page.
+
+### Hide the PHP version
+
+`moneyfrog-core.php` calls `header_remove('X-Powered-By')` on every WordPress request (front end, REST, wp-admin, wp-login), and the smoke check `no_powered_by_header` enforces it. As belt and braces for requests that never reach WordPress, also put this in `<STAGING_ROOT>/.user.ini`:
+
+```ini
+expose_php = Off
+```
+
+`.user.ini` lives in the docroot, which `deploy.sh` never writes, so create it by hand once. It takes effect after the handler's cache interval (usually about 5 minutes).
 
 ## 3. Database
 
@@ -70,6 +100,7 @@ Verification happens after step 6 (the web handler) and with the CLI now: `<PHP8
 ```sh
 cd <STAGING_ROOT>
 $WP core download --locale=en_US          # latest stable
+ls wp-includes/version.php wp-admin/index.php   # must exist: with a too-low memory_limit the download fails WITHOUT an error
 ```
 
 ## 5. wp-config.php (one level above the docroot)
@@ -160,6 +191,18 @@ Smoke and inventory runs supply the credentials through `SMOKE_AUTH=<STAGING_USE
 
 ## 8. First deploy
 
+### Where releases live
+
+`RELEASES_DIR` (absolute) holds the uploaded tarballs and the kept builds (source code, `composer.json`). It must be **outside every web root**. `deploy.sh` refuses a `RELEASES_DIR` that is relative, contains `.` or `..` segments, or equals, contains or sits inside `STAGING_ROOT`, `LIVE_ROOT` or the target root. Create it once, e.g. `<ACCOUNT_HOME>/blog-releases`, and set it in `.env.deploy`.
+
+When `RELEASES_DIR` is not set the script falls back to `<ROOT>/../releases` (backward compatible) and prints a WARNING: on a shared host that path can land inside another site's web root. If a releases directory unavoidably lives under a web root, deny web access with a `.htaccess` placed in it:
+
+```apache
+Require all denied
+```
+
+and confirm its URL answers 403 or 404.
+
 From the repo, on the pushed commit:
 
 ```sh
@@ -224,7 +267,7 @@ Checks that need WP-CLI (PHP version, `file_edit_disabled`, `two_factor_enforced
 
 ## 12. Rollback
 
-Each deploy keeps the previous releases under `<STAGING_ROOT>/../releases/` (newest 5 per target, named `<target>-<sha12>-<timestamp>`). A failed deploy rolls itself back to the previous release. To go back deliberately:
+Each deploy keeps the previous releases under `<RELEASES_DIR>/` (newest 5 per target, named `<target>-<sha12>-<timestamp>`). A failed deploy rolls itself back to the previous release. To go back deliberately:
 
 1. Re-deploy the previous pushed commit: `infra/deploy.sh staging <previous-sha>` (preferred, it updates `.mf-release`, verifies and flushes caches), or
 2. By hand on the server: `rsync -a --delete <releases>/<name>/wp-content/mu-plugins/ <ROOT>/wp-content/mu-plugins/` (and likewise `themes/moneyfrog/` and `plugins/two-factor/`), write the old full SHA into `<ROOT>/wp-content/.mf-release`, then `$WP cache flush && $WP rewrite flush`.
