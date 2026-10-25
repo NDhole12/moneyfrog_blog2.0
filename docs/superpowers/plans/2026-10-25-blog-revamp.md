@@ -227,7 +227,7 @@ Each theme task: build to the canvas artboard, then check at 1440 px and 390 px 
 - Allow-list (`allowlist.mjs`, builder may extend): `moneyfrog.in`, `blog.moneyfrog.in`, `amfiindia.com`, `sebi.gov.in`, `rbi.org.in`, `incometax.gov.in`, `irdai.gov.in`, `npstrust.org.in`, `india.gov.in`, `youtube.com`, `youtu.be`, plus any `*.gov.in`.
 
 - [ ] **Step 1: Write failing tests** with fixtures:
-  `removes german casino paragraph` (dec-2025 fixture: output lacks `betalice`/`casino`; `removed` has one `paragraph`; the three real "Negatives in November" bullets remain) · `keeps hinglish and finance bonus` (hinglish fixture unchanged; finance-bonus "Pay hike or Bonus" unchanged, at most one `keyword` flag) · `strips scripts handlers and hidden` · `keeps youtube iframe drops others` · `unwraps non-allowlisted links keeps allowlisted`.
+  `removes german casino paragraph` (dec-2025 fixture: output lacks the casino link and `casino`; `removed` has one `paragraph`; the three real "Negatives in November" bullets remain) · `keeps hinglish and finance bonus` (hinglish fixture unchanged; finance-bonus "Pay hike or Bonus" unchanged, at most one `keyword` flag) · `strips scripts handlers and hidden` · `keeps youtube iframe drops others` · `unwraps non-allowlisted links keeps allowlisted`.
 - [ ] **Step 2:** `npm test`. Expected: FAIL.
 - [ ] **Step 3:** Implement with `cheerio` (+ `sanitize-html` for the final whitelist pass).
 - [ ] **Step 4:** `npm test`. Expected: PASS. Then run `node src/fetch.mjs` against the live old blog once. Expected counts ≈ posts 240, pages 73, media 314, categories 23, users 9 (record actuals in the report).
@@ -297,7 +297,7 @@ Each theme task: build to the canvas artboard, then check at 1440 px and 390 px 
 - Consumes: `Content::toc`, `Content::addHeadingIds` (applied on `the_content` filter in the plugin), `Content::readingTime`, `Byline::forPost`, `Byline::initials`, disclaimer part.
 - Produces: post page per canvas artboard 3. Share links: LinkedIn `https://www.linkedin.com/sharing/share-offsite/?url=`, WhatsApp `https://wa.me/?text=`, X `https://x.com/intent/post?url=`; copy-link button (`navigator.clipboard`, visible "Copied" state, works without JS as a plain link). TOC shown only when `toc()` non-empty. Previous/next = same topic. "Keep reading" = 3 newest same-topic excluding self. JSON-LD `BlogPosting` (headline, datePublished, dateModified, author name from byline, publisher Moneyfrog).
 
-- [ ] **Step 1:** Smoke on an imported real post (Market Outlook – December 2025, clean slug): `single_has_disclaimer` (exact disclaimer copy), `single_toc` (links `#positives-in-november`), `single_no_spam` (no `betalice`, no `casino`), `single_byline` (`Mushtaq Kazi`, `MK`), `single_jsonld` (`"@type":"BlogPosting"`), `single_no_comments` (no `respond`), `single_old_bom_url_redirects` (old BOM URL → 301 → this post, 200).
+- [ ] **Step 1:** Smoke on an imported real post (Market Outlook – December 2025, clean slug): `single_has_disclaimer` (exact disclaimer copy), `single_toc` (links `#positives-in-november`), `single_no_spam` (no `casino`, no German-language paragraph), `single_byline` (`Mushtaq Kazi`, `MK`), `single_jsonld` (`"@type":"BlogPosting"`), `single_no_comments` (no `respond`), `single_old_bom_url_redirects` (old BOM URL → 301 → this post, 200).
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run smoke; shoot the post at 1440/390. Expected: PASS and matches canvas.
