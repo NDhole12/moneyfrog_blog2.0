@@ -126,10 +126,17 @@ users_sitemap_gone() {
   ! curl -s --max-time 20 "$BASE/wp-sitemap.xml" | grep -qi 'wp-sitemap-users'
 }
 no_powered_by_header() {
-  local p
+  # ONE request per path (the same response is asserted on for status and header). A non-200 on / or /wp-json/ is a FAIL.
+  local p h status
   for p in / /wp-login.php /wp-json/; do
-    curl -s -D - -o /dev/null --max-time 20 "$BASE$p" | tr -d '\r' | grep -qi '^HTTP/' || return 1
-    ! curl -s -D - -o /dev/null --max-time 20 "$BASE$p" | tr -d '\r' | grep -qi '^X-Powered-By:'
+    h="$(curl -sS -L -D - -o /dev/null --max-time 20 "$BASE$p" | tr -d '\r')" || return 1
+    status="$(grep -i '^HTTP/' <<<"$h" | tail -n 1 | awk '{print $2}')"
+    case "$p" in
+      /|/wp-json/) [ "$status" = 200 ] || return 1 ;;
+      *) [ -n "$status" ] || return 1 ;;
+    esac
+    # -L: with redirects the headers of every hop are in $h; none may carry the header.
+    ! grep -qi '^X-Powered-By:' <<<"$h" || return 1
   done
 }
 rest_embed_no_author() {
@@ -209,6 +216,8 @@ not_found_themed() {
 seed_fixtures() { bash tests/fixtures/seed.sh "$BASE" >/dev/null 2>&1; }
 remove_fixtures() { bash tests/fixtures/seed.sh --remove "$BASE" >/dev/null 2>&1; }
 home_sections() {
+  # Self-contained: seed the QA fixtures (idempotent; the EXIT trap removes them) so it also passes on a real-content site.
+  seed_fixtures
   local h; h="$(home_html)"
   grep -q 'Codespark QA – Market Outlook: October 2026' <<<"$h" || return 1
   [ "$(grep -o 'class="card card--compact' <<<"$h" | wc -l | tr -d ' ')" = 4 ] || return 1

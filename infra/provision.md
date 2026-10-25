@@ -81,13 +81,9 @@ Also `<PHP83_BIN> -v` must print 8.3.x. No `phpinfo` page is ever created. Once 
 
 ### Hide the PHP version
 
-`moneyfrog-core.php` calls `header_remove('X-Powered-By')` on every WordPress request (front end, REST, wp-admin, wp-login), and the smoke check `no_powered_by_header` enforces it. As belt and braces for requests that never reach WordPress, also put this in `<STAGING_ROOT>/.user.ini`:
+`moneyfrog-core.php` calls `header_remove('X-Powered-By')` on every WordPress request (front end, REST, wp-admin, wp-login). That is **the** control for WordPress responses, and the smoke check `no_powered_by_header` enforces it (one request per path, a 200 on `/` and `/wp-json/`, and no `X-Powered-By` header).
 
-```ini
-expose_php = Off
-```
-
-`.user.ini` lives in the docroot, which `deploy.sh` never writes, so create it by hand once. It takes effect after the handler's cache interval (usually about 5 minutes).
+Do **not** rely on `.user.ini` for this: `expose_php` is a `PHP_INI_SYSTEM` setting, so `expose_php = Off` in `.user.ini` (or `.htaccess`) is ignored. The header on requests that never reach WordPress (a stray `.php` file, a PHP fatal before WordPress loads) can only be removed at host level: through the hosting panel's PHP selector / "MultiPHP INI Editor" if it exposes `expose_php`, or in the host's `php.ini` if you control it. On a shared host where neither is available, accept that residual header; the probe step above is how you see what the handler sends before WordPress is installed.
 
 ## 3. Database
 
@@ -194,6 +190,8 @@ Smoke and inventory runs supply the credentials through `SMOKE_AUTH=<STAGING_USE
 ### Where releases live
 
 `RELEASES_DIR` (absolute) holds the uploaded tarballs and the kept builds (source code, `composer.json`). It must be **outside every web root**. `deploy.sh` refuses a `RELEASES_DIR` that is relative, contains `.` or `..` segments, or equals, contains or sits inside `STAGING_ROOT`, `LIVE_ROOT` or the target root. Create it once, e.g. `<ACCOUNT_HOME>/blog-releases`, and set it in `.env.deploy`.
+
+Checks: repeated slashes and a trailing slash are normalised before comparing, and after connecting the script compares the **resolved** paths on the server (`realpath -m`, so symlinks such as `~/www` pointing at `public_html` are followed) of `RELEASES_DIR` against the target root, `STAGING_ROOT`, `LIVE_ROOT` and `$HOME/public_html`, refusing if it is inside (or contains) any of them. Other sites' docroots on the same account (addon domains, other subdomains) **cannot be detected automatically**: choose a directory directly under `<ACCOUNT_HOME>` that no domain points at, and confirm in the control panel's domain list.
 
 When `RELEASES_DIR` is not set the script falls back to `<ROOT>/../releases` (backward compatible) and prints a WARNING: on a shared host that path can land inside another site's web root. If a releases directory unavoidably lives under a web root, deny web access with a `.htaccess` placed in it:
 

@@ -70,13 +70,13 @@ done
 [ -n "$ROOT" ] || die "$( [ "$TARGET" = staging ] && echo STAGING_ROOT || echo LIVE_ROOT ) is not set in $ENV_FILE"
 
 # ---- release storage: must be OUTSIDE every web root (the tarballs and builds hold source) ----
-ROOT="${ROOT%/}"
+ROOT="$(printf '%s' "$ROOT" | sed 's#//*#/#g')"; [ "$ROOT" = / ] || ROOT="${ROOT%/}"
 if [ -n "${RELEASES_DIR:-}" ]; then
-  REL_BASE="${RELEASES_DIR%/}"
+  REL_BASE="$(printf '%s' "$RELEASES_DIR" | sed 's#//*#/#g')"; [ "$REL_BASE" = / ] || REL_BASE="${REL_BASE%/}"
   case "$REL_BASE" in /*) ;; *) die "RELEASES_DIR must be an absolute path" ;; esac
   case "/$REL_BASE/" in */../*|*/./*) die "RELEASES_DIR must not contain . or .. segments" ;; esac
   for r in "$ROOT" "${STAGING_ROOT:-}" "${LIVE_ROOT:-}"; do
-    r="${r%/}"; [ -n "$r" ] || continue
+    r="$(printf '%s' "$r" | sed 's#//*#/#g')"; r="${r%/}"; [ -n "$r" ] || continue
     if [ "$REL_BASE" = "$r" ] || [[ "$REL_BASE" == "$r"/* ]] || [[ "$r" == "$REL_BASE"/* ]]; then
       die "RELEASES_DIR ($REL_BASE) overlaps the web root $r; choose a directory outside every docroot"
     fi
@@ -149,6 +149,24 @@ say "checking the $TARGET docroot"
 rssh "test -d $(q "$ROOT/wp-content") && { test -f $(q "$ROOT/wp-config.php") || test -f $(q "$ROOT/../wp-config.php"); }" </dev/null \
   || die "the $TARGET docroot is not a WordPress install (no wp-content, or no wp-config.php in or above it); check ${TARGET^^}_ROOT"
 
+# Symlink-aware check on the server: RELEASES_DIR (resolved) must not be inside any resolved web root.
+# Other sites' docroots on the same account cannot be detected automatically; see infra/provision.md.
+if [ -n "${RELEASES_DIR:-}" ]; then
+  say "checking RELEASES_DIR against the resolved web roots"
+  RP_SCRIPT='
+d=$(realpath -m -- "$1") || exit 3
+shift
+for r in "$@" "$HOME/public_html"; do
+  [ -n "$r" ] || continue
+  r=$(realpath -m -- "$r") || exit 3
+  case "$d/" in "$r"/*) echo "RELEASES_DIR resolves to $d, inside the web root $r" >&2; exit 4 ;; esac
+  case "$r/" in "$d"/*) echo "web root $r resolves inside RELEASES_DIR $d" >&2; exit 4 ;; esac
+done
+'
+  rssh "bash -s -- $(printf '%q ' "$REL_BASE" "$ROOT" "${STAGING_ROOT:-}" "${LIVE_ROOT:-}")" <<<"$RP_SCRIPT" \
+    || die "RELEASES_DIR failed the remote realpath check (it resolves inside a web root, or realpath is unavailable)"
+fi
+
 # ---- 1. build the archive ----
 say "archiving $SHORT"
 git archive --format=tar "$SHA" -- "${SHIP_PATHS[@]}" | gzip -9 > "$WORK/release.tar.gz" || die "git archive failed"
@@ -217,6 +235,7 @@ $COMPOSER_BIN install --no-dev --no-interaction --no-progress </dev/null
 # LINT-BEGIN (no process substitution: it fails under CageFS; tests/deploy-lint.test.sh extracts this block)
 echo "== php -l on the release =="
 LINT_LIST=$(mktemp)
+trap 'rm -f "$LINT_LIST"; cleanup' EXIT
 find wp-content/mu-plugins wp-content/themes/moneyfrog wp-content/plugins/two-factor -name "*.php" -print0 > "$LINT_LIST" </dev/null   || { rm -f "$LINT_LIST"; echo "find failed while listing PHP files" >&2; exit 13; }
 n=0
 while IFS= read -r -d "" f; do
@@ -224,6 +243,7 @@ while IFS= read -r -d "" f; do
   n=$((n + 1))
 done < "$LINT_LIST"
 rm -f "$LINT_LIST"
+trap cleanup EXIT
 echo "linted $n files"
 [ "$n" -gt 0 ] || { echo "linted 0 files: the lint did not run; refusing to apply" >&2; exit 13; }
 # LINT-END
