@@ -35,6 +35,22 @@ final class Redirects
         return $target . (str_contains($target, '?') ? '&' : '?') . $query;
     }
 
+    /**
+     * Old links ending in a byte-order mark (raw or %EF%BB%BF) point at a live post whose
+     * clean slug is not in the redirect map (the map never shadows a live path).
+     * Returns the clean path, query kept, or null when the request has no BOM.
+     */
+    public static function bomVariantTarget(string $uri): ?string
+    {
+        $beforeFragment = explode('#', $uri, 2)[0];
+        [$rawPath, $query] = array_pad(explode('?', $beforeFragment, 2), 2, '');
+        if (!str_contains(rawurldecode($rawPath), "\u{FEFF}")) {
+            return null;
+        }
+        $clean = self::normalisePath($rawPath);
+        return $query === '' ? $clean : $clean . '?' . $query;
+    }
+
     /** Only GET and HEAD requests are redirected. */
     public static function isRedirectableMethod(string $method): bool
     {

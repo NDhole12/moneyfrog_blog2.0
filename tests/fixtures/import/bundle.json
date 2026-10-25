@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-10-25T00:00:00.000Z",
+  "source": "https://blog.moneyfrog.in",
+  "bylines": [
+    {
+      "slug": "codespark-qa-import",
+      "name": "Codespark QA Import",
+      "bio": "Fixture byline for importer checks.",
+      "role": "Tester"
+    }
+  ],
+  "media": [
+    {
+      "oldId": 990001,
+      "sourceUrl": "https://blog.moneyfrog.in/wp-content/uploads/2026/01/codespark-qa-pixel.png",
+      "uploadPath": "2026/01/codespark-qa-pixel.png",
+      "alt": "Gold test pixel",
+      "oldPaths": [
+        "/wp-content/uploads/2026/01/codespark-qa-pixel.png"
+      ]
+    },
+    {
+      "oldId": 990003,
+      "sourceUrl": "https://blog.moneyfrog.in/wp-content/uploads/2026/01/codespark-qa-absent.png",
+      "uploadPath": "2026/01/codespark-qa-absent.png",
+      "alt": "",
+      "oldPaths": []
+    }
+  ],
+  "items": [
+    {
+      "oldId": 900001,
+      "oldType": "post",
+      "newSlug": "codespark-qa-import-one",
+      "title": "Codespark QA – Import & Rerun",
+      "html": "<p>Intro with <a href=\"https://blog.moneyfrog.in/codespark-qa-import-two/\">a sibling post</a>.</p><figure class=\"wp-block-image\"><img src=\"https://blog.moneyfrog.in/wp-content/uploads/2026/01/codespark-qa-pixel-300x200.png\" alt=\"x\" class=\"wp-image-77\" srcset=\"https://blog.moneyfrog.in/wp-content/uploads/2026/01/codespark-qa-pixel-300x200.png 300w, https://blog.moneyfrog.in/wp-content/uploads/2026/01/codespark-qa-pixel.png 600w\" sizes=\"100vw\"></figure><p><img src=\"https://blog.moneyfrog.in/wp-content/uploads/2026/01/codespark-qa-absent.png\" alt=\"\">Missing image above.</p><p><img src=\"https://hotlink.invalid/pic.png\" alt=\"\"></p><p>Tail text.</p>",
+      "excerpt": "Tom & Jerry's excerpt",
+      "date": "2015-03-04T10:20:30",
+      "modified": "2016-05-06T07:08:09",
+      "topic": "mutual-funds",
+      "tags": [
+        "Codespark QA Tag"
+      ],
+      "byline": "codespark-qa-import",
+      "featuredMediaOldId": 990003,
+      "oldPaths": [
+        "/codespark-qa-import-one/"
+      ]
+    },
+    {
+      "oldId": 900002,
+      "oldType": "page",
+      "newSlug": "codespark-qa-import-two",
+      "title": "Codespark QA – Import second",
+      "html": "<p>Second fixture post.</p>",
+      "excerpt": "Second.",
+      "date": "2015-03-05T10:20:30",
+      "modified": "2015-03-05T10:20:31",
+      "topic": "guides",
+      "tags": [],
+      "byline": "codespark-qa-import",
+      "featuredMediaOldId": 990001,
+      "oldPaths": [
+        "/codespark-qa-import-two/"
+      ]
+    }
+  ]
+}

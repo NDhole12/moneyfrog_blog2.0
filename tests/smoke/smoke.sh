@@ -101,6 +101,14 @@ redirect_hook_live() {
   rm -f "$f"
   [ "$code" = 301 ] && [ "$loc" = "$BASE/" ]
 }
+bom_variant_redirects() {
+  local path code loc
+  path="$(sample_post_path)"
+  [ -n "$path" ] || return 1
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE${path%/}%ef%bb%bf/")"
+  loc="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 20 "$BASE${path%/}%ef%bb%bf/?utm_source=qa")"
+  [ "$code" = 301 ] && [ "$loc" = "$BASE$path?utm_source=qa" ]
+}
 core_author_archive_hidden() {
   local id
   id="$(sample_post_id)"
@@ -168,8 +176,12 @@ newsletter_hidden() { ! home_html | grep -q 'type="email"'; }
 advisor_cta() { home_html | tr '
 ' ' ' | grep -q 'class="advisor-cta".*href="https://moneyfrog.in/contact-us"'; }
 
+# shellcheck source=tests/smoke/import-checks.sh
+source "$(dirname "$0")/import-checks.sh"
+
 # ---- checks ----
 is_local && seed_fixtures
+is_local && import_scenario
 check       home_200         status_is / 200
 check_local php_8_3          php_version_ok
 check       mu_plugin_loaded header_has /wp-json/ '^X-MF-Core: 1'
@@ -186,6 +198,7 @@ check       users_sitemap_gone     users_sitemap_gone
 check_local rest_embed_no_author   rest_embed_no_author
 check_local file_edit_disabled     file_edit_disabled
 check_local redirect_hook_live      redirect_hook_live
+check_local bom_variant_redirects      bom_variant_redirects
 check_local core_author_archive_hidden core_author_archive_hidden
 check_local byline_archive          byline_archive
 check_local byline_rest_no_user_data byline_rest_no_user_data
@@ -202,6 +215,14 @@ check_local category_page      category_page
 check_local search_works       search_works
 check       newsletter_hidden  newsletter_hidden
 check       advisor_cta        advisor_cta
+
+check_local import_dry_run_writes_nothing        import_dry_run_writes_nothing
+check_local import_first_run_creates              import_first_run_creates
+check_local import_second_run_no_duplicates       import_second_run_no_duplicates
+check_local import_missing_image_does_not_abort   import_missing_image_does_not_abort
+check_local import_post_fields                    import_post_fields
+check_local import_keeps_upload_path              import_keeps_upload_path
+check_local service_user_login_blocked            service_user_login_blocked
 
 # ---- summary ----
 echo "Summary: $PASSES passed, $FAILS failed, $SKIPS skipped"

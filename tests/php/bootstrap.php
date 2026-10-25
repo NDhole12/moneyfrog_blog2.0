@@ -6,3 +6,6 @@ require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 foreach (glob(dirname(__DIR__, 2) . '/wp-content/mu-plugins/moneyfrog-core/src/*.php') ?: [] as $file) {
     require_once $file;
 }
+
+// Pure import helpers live in the CLI folder but need no WordPress.
+require_once dirname(__DIR__, 2) . '/wp-content/mu-plugins/moneyfrog-core/src/Cli/Importer.php';

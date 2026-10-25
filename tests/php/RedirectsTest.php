@@ -11,6 +11,14 @@ final class RedirectsTest extends TestCase
         $this->assertSame('/market-outlook-december-2025/', Redirects::normalisePath("/market-outlook-december-2025\u{FEFF}"));
     }
 
+    public function test_bom_variant_of_a_live_path_has_a_canonical_target(): void
+    {
+        $this->assertSame('/market-outlook-april-2024/', Redirects::bomVariantTarget('/market-outlook-april-2024%ef%bb%bf/'));
+        $this->assertSame('/market-outlook-april-2024/?utm_source=x', Redirects::bomVariantTarget("/Market-Outlook-April-2024\u{FEFF}?utm_source=x"));
+        $this->assertNull(Redirects::bomVariantTarget('/market-outlook-april-2024/'));
+        $this->assertNull(Redirects::bomVariantTarget('/Market-Outlook-April-2024'));
+    }
+
     public function test_normalise_path_basics(): void
     {
         $this->assertSame('/a/b/', Redirects::normalisePath('//A//B?x=1'));

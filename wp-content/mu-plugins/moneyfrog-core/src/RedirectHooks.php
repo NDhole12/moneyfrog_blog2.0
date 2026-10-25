@@ -17,6 +17,14 @@ final class RedirectHooks
             return;
         }
         $target = Redirects::lookup($uri, self::map());
+        if ($target === null && is_404()) {
+            // A BOM-suffixed old link to a live post: send it to the clean path when that path exists.
+            $clean = Redirects::bomVariantTarget($uri);
+            if ($clean !== null && url_to_postid(home_url(explode('?', $clean, 2)[0])) > 0) {
+                wp_safe_redirect(home_url($clean), 301); // same path as the normalised request, so decide() would refuse it
+                exit;
+            }
+        }
         if ($target === null) {
             return;
         }

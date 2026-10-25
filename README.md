@@ -26,3 +26,15 @@ docker compose run --rm wpcli wp rewrite structure '/%postname%/' --hard
 
 Tests: `composer test` (PHPUnit), `npm test` in `migration/` (vitest),
 `tests/smoke/smoke.sh http://localhost:8080` (live checks).
+
+### Importing the old blog
+
+```bash
+node migration/src/media.mjs     # polite, resumable image download into migration/output/media/
+docker compose run --rm wpcli wp mf import /migration/output/bundle.json \
+  --media-dir=/migration/output/media [--dry-run] [--only=<oldId>]
+tests/smoke/inventory.sh http://localhost:8080 migration/output/inventory.txt
+```
+
+The import is idempotent (a second run reports `created=0`), writes `import-log.json` next to
+the bundle and exits non-zero if any item failed. Images keep their original upload paths.
