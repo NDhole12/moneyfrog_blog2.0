@@ -153,6 +153,15 @@ ROOT=$1; REL_BASE=$2; REL_NAME=$3; SHA=$4; TARGET=$5; KEEP=$6; PREFIX=$7; WP_BIN
 REL_DIR="$REL_BASE/$REL_NAME"
 DIRS="wp-content/mu-plugins wp-content/themes/moneyfrog wp-content/plugins/two-factor"
 RELFILE="$ROOT/wp-content/.mf-release"
+DIRFILE="$ROOT/wp-content/.mf-release-dir"
+TARBALL_REMOTE="$REL_BASE/$REL_NAME.tar.gz"
+KEEP_BUILD=0
+# On EVERY exit path: drop the uploaded tarball, and drop this build unless it was deployed.
+cleanup() {
+  rm -f "$TARBALL_REMOTE"
+  if [ "$KEEP_BUILD" != 1 ] && [ -d "$REL_DIR" ]; then rm -rf -- "$REL_DIR"; fi
+}
+trap cleanup EXIT
 
 [ -d "$ROOT/wp-content" ] || { echo "target docroot has no wp-content: refusing" >&2; exit 11; }
 [ -f "$ROOT/wp-config.php" ] || [ -f "$ROOT/../wp-config.php" ] || { echo "no wp-config.php: refusing" >&2; exit 11; }
@@ -160,20 +169,29 @@ command -v flock >/dev/null || { echo "flock is not available on the server" >&2
 exec 9>"$REL_BASE/.deploy.lock"
 flock -n 9 || { echo "another deploy is already running (lock $REL_BASE/.deploy.lock)" >&2; exit 20; }
 
+release_complete() { # a release dir is a valid rollback source only if fully built
+  local d=$1
+  [ -n "$d" ] && [ -d "$d" ] || return 1
+  [ -f "$d/.mf-complete" ] || return 1
+  [ -f "$d/wp-content/mu-plugins/moneyfrog-core.php" ] || return 1
+  [ -f "$d/wp-content/themes/moneyfrog/style.css" ] || return 1
+  ls "$d"/wp-content/plugins/two-factor/*.php >/dev/null 2>&1 || return 1
+}
+# The previous release is exactly the dir recorded by the last SUCCESSFUL apply (never "newest for this sha").
 PREV_SHA=""; PREV_DIR=""
-if [ -f "$RELFILE" ]; then
+if [ -f "$RELFILE" ] && [ -f "$DIRFILE" ]; then
   p=$(tr -d "[:space:]" < "$RELFILE")
-  if printf "%s" "$p" | grep -Eq "^[0-9a-f]{40}$"; then
+  n=$(tr -d "[:space:]" < "$DIRFILE")
+  if printf "%s" "$p" | grep -Eq "^[0-9a-f]{40}$" && printf "%s" "$n" | grep -Eq "^$TARGET-${p:0:12}-[0-9]+$"; then
     PREV_SHA=$p
-    PREV_DIR=$(ls -1dt "$REL_BASE/$TARGET-${p:0:12}"-*/ 2>/dev/null | head -n 1 || true)
-    PREV_DIR=${PREV_DIR%/}
+    PREV_DIR="$REL_BASE/$n"
   fi
 fi
 echo "previous release: ${PREV_SHA:-none}${PREV_DIR:+ ($PREV_DIR)}"
 
 mkdir -p "$REL_DIR"
-tar -xzf "$REL_BASE/$REL_NAME.tar.gz" -C "$REL_DIR" </dev/null
-rm -f "$REL_BASE/$REL_NAME.tar.gz"
+tar -xzf "$TARBALL_REMOTE" -C "$REL_DIR" </dev/null
+rm -f "$TARBALL_REMOTE"
 cd "$REL_DIR"
 php -r "exit(PHP_VERSION_ID >= 80300 ? 0 : 1);" </dev/null || { echo "the server CLI php is older than 8.3 (set REMOTE_PATH_PREFIX)" >&2; exit 12; }
 $COMPOSER_BIN install --no-dev --no-interaction --no-progress </dev/null
@@ -186,6 +204,7 @@ while IFS= read -r -d "" f; do
   n=$((n + 1))
 done < <(find wp-content/mu-plugins wp-content/themes/moneyfrog wp-content/plugins/two-factor -name "*.php" -print0)
 echo "linted $n files"
+touch "$REL_DIR/.mf-complete"   # written only after composer, the two-factor check and the lint all passed
 
 echo "== planned changes (rsync dry run) =="
 for d in $DIRS; do
@@ -230,7 +249,7 @@ apply_all() {
 echo "== applying =="
 if ! apply_all; then
   echo "apply FAILED" >&2
-  if [ -n "$PREV_DIR" ] && [ -d "$PREV_DIR" ]; then
+  if release_complete "$PREV_DIR"; then
     if sync_from "$PREV_DIR"; then
       flush_caches || true
       echo "rolled back to $PREV_SHA (.mf-release untouched)" >&2
@@ -239,12 +258,13 @@ if ! apply_all; then
     echo "ROLLBACK FAILED: the docroot is in a mixed state; re-sync from $PREV_DIR by hand" >&2
     exit 32
   fi
-  echo "no previous release to roll back to; the docroot may be partly updated" >&2
+  echo "no complete previous release to roll back to (${PREV_DIR:-none recorded}); NOT syncing, the docroot may be partly updated" >&2
   exit 31
 fi
 
-printf "%s\n" "$SHA" > "$RELFILE.tmp"
-mv -f "$RELFILE.tmp" "$RELFILE"
+printf "%s\n" "$REL_NAME" > "$DIRFILE.tmp" && mv -f "$DIRFILE.tmp" "$DIRFILE"
+printf "%s\n" "$SHA" > "$RELFILE.tmp" && mv -f "$RELFILE.tmp" "$RELFILE"
+KEEP_BUILD=1
 
 cd "$REL_BASE"
 ls -1dt "$TARGET"-*/ 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r old; do rm -rf -- "${old%/}"; done || true

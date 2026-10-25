@@ -22,7 +22,7 @@ WP='<PHP83_BIN> <WP_PATH>'
 COMPOSER='<PHP83_BIN> <COMPOSER_PATH>'
 ```
 
-and every `wp` / `composer` command below is written `$WP ...` / `$COMPOSER ...`. For `infra/deploy.sh` the equivalent is `WP_BIN` / `COMPOSER_BIN` in `.env.deploy` (or `REMOTE_PATH_PREFIX`, the directory holding the 8.3 `php`).
+and every `wp` / `composer` command below is written `$WP ...` / `$COMPOSER ...`. For `infra/deploy.sh` set `REMOTE_PATH_PREFIX` in `.env.deploy` to the directory holding the 8.3 `php`. It is **required** whenever the server's default `php` is below 8.3: the deploy's version gate and `php -l` call plain `php` from PATH (as do `wp` and `composer`), so without it the deploy stops at the gate. `WP_BIN` / `COMPOSER_BIN` are optional overrides.
 
 ## 0. Prerequisites (local)
 
@@ -74,20 +74,28 @@ $WP core download --locale=en_US          # latest stable
 
 ## 5. wp-config.php (one level above the docroot)
 
-Create the file without the database secret ever appearing in shell history or the process list for longer than the command itself. Disable history, read the secret silently, use it once, unset it:
+Create the file without the database secret appearing in the process list (argv) or shell history. **Preferred:** a mode-600 file that is read on stdin and then shredded:
 
 ```sh
 cd <STAGING_ROOT>
 set +o history                            # bash: nothing below is recorded
-read -rs DB_PASS                          # paste the secret from the ledger; nothing is echoed
-echo
-$WP config create --dbname=<DB_NAME> --dbuser=<DB_USER> --dbpass="$DB_PASS" \
-    --dbprefix=mfb_ --skip-check
-unset DB_PASS
+( umask 077; cat > ../dbpass.tmp )        # paste the secret from the ledger, press Enter, then Ctrl-D
+$WP config create --dbname=<DB_NAME> --dbuser=<DB_USER> --prompt=dbpass \
+    --dbprefix=mfb_ --skip-check < ../dbpass.tmp >/dev/null   # WP-CLI echoes the command with the secret, so discard stdout
+shred -u ../dbpass.tmp
 set -o history
 ```
 
-(Alternative without the secret in argv: write it to a mode-600 file, run `$WP config create ... --prompt=dbpass < secretfile`, then `shred -u secretfile`.)
+(No other command in that step may read stdin.) **Alternative** (the secret is briefly visible in `ps` to other users of the host):
+
+```sh
+set +o history
+read -rs DB_PASS        # run this line ON ITS OWN, paste the secret, press Enter; then paste the rest
+echo
+$WP config create --dbname=<DB_NAME> --dbuser=<DB_USER> --dbpass="$DB_PASS" --dbprefix=mfb_ --skip-check
+unset DB_PASS
+set -o history
+```
 
 `wp config create` generates fresh salts. Then set every define with its own command (none of these read stdin; string values are quoted inside the raw value):
 
@@ -106,7 +114,9 @@ Verify **every** define, the table prefix, and the database connection:
 for c in DISALLOW_FILE_EDIT DISALLOW_FILE_MODS WP_AUTO_UPDATE_CORE WP_DEBUG FORCE_SSL_ADMIN; do
   printf '%s=' "$c"; $WP config get "$c" --type=constant; echo
 done
-# expected: DISALLOW_FILE_EDIT=1  DISALLOW_FILE_MODS=1  WP_AUTO_UPDATE_CORE=minor  WP_DEBUG=(empty = false)  FORCE_SSL_ADMIN=1
+# expected (WP-CLI prints true as 1, false as an empty line, a string without quotes):
+#   DISALLOW_FILE_EDIT=1  DISALLOW_FILE_MODS=1  WP_AUTO_UPDATE_CORE=minor  WP_DEBUG=<empty line>  FORCE_SSL_ADMIN=1
+# an empty WP_DEBUG is correct (false); a MISSING constant makes the command fail with an error instead
 $WP config get table_prefix               # mfb_
 $WP db check                              # must report the database tables OK: proves the connection and the grants
 ```
@@ -157,7 +167,7 @@ infra/deploy.sh --dry-run staging <sha>      # read the plan
 infra/deploy.sh staging <sha>                # prints DEPLOYED <sha> staging only when the server confirms it
 ```
 
-The script checks that the target is a WordPress install first, takes a server-side lock (a second concurrent deploy fails fast), ships `wp-content/mu-plugins`, `wp-content/themes/moneyfrog` and `composer install --no-dev` (which installs the Two Factor plugin), syntax-checks every PHP file, prints the rsync plan including every file it will delete, applies only those three directories, verifies them, flushes cache and rewrites, and only then writes `wp-content/.mf-release`. If any step fails after the sync started, the three directories are re-synced from the previous release, `.mf-release` stays unchanged and the script exits non-zero ("rolled back to <old sha>"). Then on the server:
+The script checks that the target is a WordPress install first, takes a server-side lock (a second concurrent deploy fails fast), ships `wp-content/mu-plugins`, `wp-content/themes/moneyfrog` and `composer install --no-dev` (which installs the Two Factor plugin), syntax-checks every PHP file, prints the rsync plan including every file it will delete, applies only those three directories, verifies them, flushes cache and rewrites, and only then writes `wp-content/.mf-release`. If any step fails after the sync started, the three directories are re-synced from the previous release (the exact directory recorded in `wp-content/.mf-release-dir` by the last successful deploy, and only if it is complete; otherwise nothing is synced and the exit code is 31), `.mf-release` stays unchanged and the script exits non-zero ("rolled back to <old sha>"). Then on the server:
 
 ```sh
 $WP theme activate moneyfrog
