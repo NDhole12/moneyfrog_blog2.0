@@ -69,6 +69,23 @@ for v in DEPLOY_HOST DEPLOY_USER; do
 done
 [ -n "$ROOT" ] || die "$( [ "$TARGET" = staging ] && echo STAGING_ROOT || echo LIVE_ROOT ) is not set in $ENV_FILE"
 
+# ---- release storage: must be OUTSIDE every web root (the tarballs and builds hold source) ----
+ROOT="${ROOT%/}"
+if [ -n "${RELEASES_DIR:-}" ]; then
+  REL_BASE="${RELEASES_DIR%/}"
+  case "$REL_BASE" in /*) ;; *) die "RELEASES_DIR must be an absolute path" ;; esac
+  case "/$REL_BASE/" in */../*|*/./*) die "RELEASES_DIR must not contain . or .. segments" ;; esac
+  for r in "$ROOT" "${STAGING_ROOT:-}" "${LIVE_ROOT:-}"; do
+    r="${r%/}"; [ -n "$r" ] || continue
+    if [ "$REL_BASE" = "$r" ] || [[ "$REL_BASE" == "$r"/* ]] || [[ "$r" == "$REL_BASE"/* ]]; then
+      die "RELEASES_DIR ($REL_BASE) overlaps the web root $r; choose a directory outside every docroot"
+    fi
+  done
+else
+  REL_BASE="$ROOT/../releases"
+  say "WARNING: RELEASES_DIR is not set; using the default $ROOT/../releases, which can sit inside another site's web root on a shared host. Set RELEASES_DIR to an absolute path outside every docroot (see infra/provision.md)."
+fi
+
 # ---- git gates: clean tree, sha on an allowed remote ref ----
 cd "$REPO_DIR"
 [ -z "$(git status --porcelain)" ] || die "working tree is not clean; commit or stash first"
@@ -85,7 +102,6 @@ done
 SHORT="${SHA:0:12}"
 STAMP="$(date -u +%Y%m%d%H%M%S)"
 REL_NAME="$TARGET-$SHORT-$STAMP"
-REL_BASE="$ROOT/../releases"
 TARBALL="$REL_BASE/$REL_NAME.tar.gz"
 
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -97,6 +113,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
   allowed refs : $ALLOWED_REFS
   host key     : StrictHostKeyChecking=$STRICT_HOST_KEY
   ship paths   : ${SHIP_PATHS[*]}
+  releases dir : $REL_BASE${RELEASES_DIR:+ (RELEASES_DIR, validated outside every docroot)}
   1. check the server: $ROOT/wp-content and wp-config.php (in or above the docroot) exist
   2. git archive $SHORT -> tar.gz; upload to $REL_BASE/ (size and sha256 verified)
   3. on the server, under flock $REL_BASE/.deploy.lock: extract into $REL_BASE/$REL_NAME
@@ -197,13 +214,19 @@ php -r "exit(PHP_VERSION_ID >= 80300 ? 0 : 1);" </dev/null || { echo "the server
 $COMPOSER_BIN install --no-dev --no-interaction --no-progress </dev/null
 [ -d wp-content/plugins/two-factor ] || { echo "two-factor was not installed by composer" >&2; exit 12; }
 
+# LINT-BEGIN (no process substitution: it fails under CageFS; tests/deploy-lint.test.sh extracts this block)
 echo "== php -l on the release =="
+LINT_LIST=$(mktemp)
+find wp-content/mu-plugins wp-content/themes/moneyfrog wp-content/plugins/two-factor -name "*.php" -print0 > "$LINT_LIST" </dev/null   || { rm -f "$LINT_LIST"; echo "find failed while listing PHP files" >&2; exit 13; }
 n=0
 while IFS= read -r -d "" f; do
-  php -l "$f" >/dev/null </dev/null || { echo "PHP syntax error in $f" >&2; exit 13; }
+  php -l "$f" >/dev/null </dev/null || { rm -f "$LINT_LIST"; echo "PHP syntax error in $f" >&2; exit 13; }
   n=$((n + 1))
-done < <(find wp-content/mu-plugins wp-content/themes/moneyfrog wp-content/plugins/two-factor -name "*.php" -print0)
+done < "$LINT_LIST"
+rm -f "$LINT_LIST"
 echo "linted $n files"
+[ "$n" -gt 0 ] || { echo "linted 0 files: the lint did not run; refusing to apply" >&2; exit 13; }
+# LINT-END
 touch "$REL_DIR/.mf-complete"   # written only after composer, the two-factor check and the lint all passed
 
 echo "== planned changes (rsync dry run) =="
