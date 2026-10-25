@@ -201,6 +201,16 @@ category_page() {
   [ "$(http_status "/category/mutual-funds/?order=asc&tag=sip")" = 200 ] || return 1
   curl -s --max-time 20 "$BASE/category/mutual-funds/?order=asc" | grep -q 'class="pagination"'
 }
+category_tag_pills_use_names() {
+  local h pills n
+  h="$(curl -s --max-time 20 "$BASE/category/market-outlook/" | tr '
+' ' ')"
+  pills="$(grep -o '<nav class="chips" aria-label="Sub-topics">.*</nav>' <<<"$h" | sed 's#</nav>.*#</nav>#' | grep -o '<a [^>]*>[^<]*</a>' | sed 's#<[^>]*>##g')"
+  n="$(grep -c . <<<"$pills")"
+  [ "$n" -ge 2 ] && [ "$n" -le 9 ] || return 1
+  grep -qx 'All' <<<"$pills" || return 1
+  ! grep -qE '^[a-z0-9]+(-[a-z0-9]+)+$' <<<"$pills"
+}
 search_works() {
   local h
   [ "$(http_status '/?s=SIP')" = 200 ] || return 1
@@ -429,6 +439,7 @@ check_local home_sections      home_sections
 check_local cover_for_no_image cover_for_no_image
 check_local category_page      category_page
 check_local search_works       search_works
+check       category_tag_pills_use_names category_tag_pills_use_names
 check       newsletter_hidden  newsletter_hidden
 check       advisor_cta        advisor_cta
 

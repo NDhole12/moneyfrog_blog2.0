@@ -117,7 +117,7 @@ function mf_row_label(WP_Post $post, string $topicName): string
     if (is_array($tags)) {
         foreach ($tags as $tag) {
             if (!in_array($tag->slug, MF_UTILITY_TAGS, true)) {
-                return $tag->name;
+                return mf_tag_label($tag);
             }
         }
     }
@@ -213,7 +213,24 @@ function mf_pinned_post(WP_Term $topic): ?WP_Post
     return $cache[$topic->term_id];
 }
 
-/** Sub-topic pills: the non-utility tags used by posts in a topic, most used first. */
+/**
+ * Display name of a tag. Imported tags often carry their slug as the name
+ * ("equity-market-panic"); those read as "Equity market panic". Real names pass through.
+ */
+function mf_tag_label(WP_Term $tag): string
+{
+    $name = trim($tag->name);
+    if ($name !== '' && $name === $tag->slug) {
+        $name = str_replace('-', ' ', $name);
+        return mb_strtoupper(mb_substr($name, 0, 1)) . mb_substr($name, 1);
+    }
+    return $name;
+}
+
+/**
+ * Sub-topic pills: up to $limit non-utility tags, ranked by how many posts of THIS topic
+ * carry them (not the global tag count). Ties break alphabetically by slug.
+ */
 function mf_subtopics(WP_Term $topic, int $limit = 8): array
 {
     $ids = get_posts([
@@ -223,12 +240,21 @@ function mf_subtopics(WP_Term $topic, int $limit = 8): array
     if ($ids === []) {
         return [];
     }
-    $tags = wp_get_object_terms($ids, 'post_tag', ['orderby' => 'count', 'order' => 'DESC']);
-    if (is_wp_error($tags)) {
+    $rows = wp_get_object_terms($ids, 'post_tag', ['fields' => 'all_with_object_id']);
+    if (is_wp_error($rows)) {
         return [];
     }
-    $tags = array_filter($tags, static fn (WP_Term $t): bool => !in_array($t->slug, MF_UTILITY_TAGS, true));
-    return array_slice(array_values($tags), 0, $limit);
+    $uses  = [];
+    $terms = [];
+    foreach ($rows as $t) {
+        if (in_array($t->slug, MF_UTILITY_TAGS, true)) {
+            continue;
+        }
+        $uses[$t->term_id]  = ($uses[$t->term_id] ?? 0) + 1;
+        $terms[$t->term_id] = $t;
+    }
+    uasort($terms, static fn (WP_Term $x, WP_Term $y): int => [$uses[$y->term_id], $x->slug] <=> [$uses[$x->term_id], $y->slug]);
+    return array_slice(array_values($terms), 0, $limit);
 }
 
 /** Sort direction requested on a category page: only `asc` is honoured, anything else is newest first. */
