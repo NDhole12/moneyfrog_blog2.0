@@ -150,7 +150,7 @@ service_user_login_blocked() {
   code="$(grep -c 'wordpress_logged_in' "$jar" || true)"
   wp_nopath eval '\MoneyfrogCore\ServiceUser::rotatePassword();' >/dev/null 2>&1
   rm -f "$jar"
-  [ "$code" = 0 ] && grep -q 'cannot sign in' <<<"$body"
+  [ "$code" = 0 ] && grep -q "details didn't work" <<<"$body"
 }
 
 import_slug_taken_and_per_item_errors() {
