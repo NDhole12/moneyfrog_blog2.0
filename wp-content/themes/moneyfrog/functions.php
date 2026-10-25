@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) {
 require_once get_template_directory() . '/inc/icons.php';
 require_once get_template_directory() . '/inc/gtm.php';
 require_once get_template_directory() . '/inc/queries.php';
+require_once get_template_directory() . '/inc/single.php';
 
 add_action('after_setup_theme', static function (): void {
     add_theme_support('title-tag');

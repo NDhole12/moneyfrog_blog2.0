@@ -176,6 +176,72 @@ newsletter_hidden() { ! home_html | grep -q 'type="email"'; }
 advisor_cta() { home_html | tr '
 ' ' ' | grep -q 'class="advisor-cta".*href="https://moneyfrog.in/contact-us"'; }
 
+# ---- single post page (real imported posts; local only) ----
+SINGLE_DEC=/market-outlook-december-2025/
+SINGLE_H2_POST=/tax-benefit-on-home-loan-section-24-80ee-80c/   # real post with 3 <h2>, so a TOC
+SINGLE_IMG_POST=/market-outlook-may-2023/                       # real post with a featured image
+single_html() { curl -s --max-time 30 "$BASE$1"; }
+single_flat() { single_html "$1" | tr '\n' ' ' | tr -s ' '; }
+single_has_disclaimer() {
+  single_flat "$SINGLE_DEC" | grep -qF 'Mutual Fund Disclaimer: Mutual Fund investments are subject to market risks. Please read all scheme related documents carefully before investing. Past performance is not an indicator of future returns. Insurance Disclaimer: Insurance is a subject matter of the solicitation. For more details on policy terms, conditions, exclusions, limitations, please refer/read policy brochure carefully before concluding sale. Articles on this blog are for education only and are not investment advice.'
+}
+single_toc() {
+  local h id
+  h="$(single_flat "$SINGLE_H2_POST")"
+  id="$(grep -o '<h2 id="[^"]*"' <<<"$h" | head -n1 | sed 's/<h2 id="//; s/"$//')"
+  [ -n "$id" ] || return 1
+  grep -q 'aria-label="On this page"' <<<"$h" || return 1
+  grep -q "href=\"#$id\"" <<<"$h"
+}
+single_toc_absent_ok() {
+  local h
+  [ "$(http_status "$SINGLE_DEC")" = 200 ] || return 1
+  h="$(single_flat "$SINGLE_DEC")"
+  ! grep -q 'aria-label="On this page"' <<<"$h" && ! grep -qiE '(Fatal error|Warning|Notice|Deprecated):' <<<"$h" && grep -q 'class="entry-content"' <<<"$h"
+}
+single_no_spam() { local h; h="$(single_flat "$SINGLE_DEC")"; [ -n "$h" ] && ! grep -qiE 'betalice|casino' <<<"$h"; }
+single_byline() { local h; h="$(single_flat "$SINGLE_DEC")"; grep -q 'Mushtaq Kazi' <<<"$h" && grep -q '>MK<' <<<"$h" && grep -q 'href="[^"]*/author/mushtaq-kazi/"' <<<"$h"; }
+single_jsonld() {
+  local ld
+  ld="$(single_html "$SINGLE_DEC" | tr '\n' ' ' | sed -n 's#.*<script type="application/ld+json">\(.*\)</script>.*#\1#p' | sed 's#</script>.*##')"
+  grep -q '"@type":"BlogPosting"' <<<"$ld" && grep -q '"datePublished":"2025-12-[0-9T:]*+05:30"' <<<"$ld" \
+    && grep -q '"dateModified":"[0-9T:-]*+05:30"' <<<"$ld" && grep -q '"headline":"Market Outlook – December 2025"' <<<"$ld" \
+    && grep -q '"author":{"@type":"Person","name":"Mushtaq Kazi"}' <<<"$ld" && grep -q '"publisher":{"@type":"Organization","name":"Moneyfrog"' <<<"$ld"
+}
+single_no_comments() {
+  local h; h="$(single_flat "$SINGLE_DEC")"
+  [ -n "$h" ] && ! grep -qiE '\brespond\b|id="comments"|comment-form|wp-comments-post' <<<"$h"
+}
+single_old_bom_url_redirects() {
+  local code loc
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/market-outlook-december-2025%ef%bb%bf/")"
+  loc="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 20 "$BASE/market-outlook-december-2025%ef%bb%bf/")"
+  [ "$code" = 301 ] && [ "$loc" = "$BASE$SINGLE_DEC" ] && [ "$(http_status "$SINGLE_DEC")" = 200 ]
+}
+single_hero() {
+  local a b
+  a="$(single_flat "$SINGLE_DEC")"; b="$(single_flat "$SINGLE_IMG_POST")"
+  grep -q 'class="post-hero"' <<<"$a" && grep -q 'class="mf-cover mf-cover--[a-z]* mf-cover--hero"' <<<"$a" || return 1
+  grep -q 'class="post-hero"' <<<"$b" && grep -qE '<img[^>]*class="[^"]*wp-post-image' <<<"$b" && grep -qE 'wp-post-image[^>]*alt="[^"]+"|alt="[^"]+"[^>]*wp-post-image' <<<"$b"
+}
+single_share() {
+  local h; h="$(single_flat "$SINGLE_DEC")"
+  grep -q 'https://www.linkedin.com/sharing/share-offsite/?url=' <<<"$h" && grep -q 'https://wa.me/?text=' <<<"$h" \
+    && grep -q 'https://x.com/intent/post?url=' <<<"$h" && grep -q 'data-copy-link' <<<"$h" && grep -q 'aria-live="polite"' <<<"$h" \
+    && [ "$(grep -o 'rel="noopener noreferrer"' <<<"$h" | wc -l | tr -d ' ')" -ge 3 ]
+}
+single_progress() {
+  local h; h="$(single_flat "$SINGLE_DEC")"
+  grep -q 'role="progressbar"' <<<"$h" && grep -q 'assets/js/progress.js' <<<"$h" && grep -q 'assets/js/copy-link.js' <<<"$h" \
+    && curl -s --max-time 20 "$BASE/wp-content/themes/moneyfrog/assets/js/progress.js" | grep -q 'prefers-reduced-motion'
+}
+single_related() {
+  local h; h="$(single_flat "$SINGLE_DEC")"
+  grep -q '>Keep reading<' <<<"$h" && [ "$(grep -o 'class="card card--default"' <<<"$h" | wc -l | tr -d ' ')" = 3 ] \
+    && grep -q 'aria-label="Previous and next articles"' <<<"$h" && grep -q 'Talk to an advisor' <<<"$h"
+}
+single_one_h1() { [ "$(single_html "$SINGLE_DEC" | grep -o '<h1[ >]' | wc -l | tr -d ' ')" = 1 ]; }
+
 # shellcheck source=tests/smoke/import-checks.sh
 source "$(dirname "$0")/import-checks.sh"
 
@@ -215,6 +281,20 @@ check_local category_page      category_page
 check_local search_works       search_works
 check       newsletter_hidden  newsletter_hidden
 check       advisor_cta        advisor_cta
+
+check_local single_has_disclaimer           single_has_disclaimer
+check_local single_toc                      single_toc
+check_local single_toc_absent_ok            single_toc_absent_ok
+check_local single_no_spam                  single_no_spam
+check_local single_byline                   single_byline
+check_local single_jsonld                   single_jsonld
+check_local single_no_comments              single_no_comments
+check_local single_old_bom_url_redirects    single_old_bom_url_redirects
+check_local single_hero                     single_hero
+check_local single_share                    single_share
+check_local single_progress                 single_progress
+check_local single_related                  single_related
+check_local single_one_h1                   single_one_h1
 
 check_local import_dry_run_writes_nothing        import_dry_run_writes_nothing
 check_local import_first_run_creates              import_first_run_creates
