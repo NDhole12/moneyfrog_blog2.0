@@ -46,7 +46,7 @@ author_enum_blocked() {
   [ "$c" = 403 ] || [ "$c" = 404 ]
 }
 headers_ok() {
-  local h; h="$(curl -s -D - -o /dev/null --max-time 20 "$BASE/" | tr -d '')"
+  local h; h="$(curl -s -D - -o /dev/null --max-time 20 "$BASE/" | tr -d '\r')"
   grep -qi '^X-Content-Type-Options: nosniff' <<<"$h" || return 1
   grep -qi '^Referrer-Policy: strict-origin-when-cross-origin' <<<"$h" || return 1
   local csp; csp="$(grep -i '^Content-Security-Policy:' <<<"$h")"
@@ -54,18 +54,45 @@ headers_ok() {
   ! grep -q 'fonts.googleapis.com' <<<"$csp" || return 1
   if ! is_local; then grep -qi '^Strict-Transport-Security:' <<<"$h" || return 1; fi
 }
-no_comment_form() {
-  local url html
-  url="$(wp eval '
+sample_post_path() {
+  wp eval '
     $p = get_posts(["title" => "Codespark QA sample", "post_status" => "publish", "numberposts" => 1]);
     $id = $p ? $p[0]->ID : wp_insert_post(["post_title" => "Codespark QA sample", "post_content" => "Sample body.", "post_status" => "publish"]);
-    echo get_permalink($id);' | tail -n1 | tr -d '')"
-  [ -n "$url" ] || return 1
-  # permalink is built from the site URL; fetch via BASE regardless of the stored host
-  html="$(curl -s --max-time 20 "$BASE/$(sed -E 's#^https?://[^/]+/##' <<<"$url")")"
+    echo wp_make_link_relative(get_permalink($id));' | tail -n1 | tr -d '\r'
+}
+sample_post_id() {
+  wp eval '$p = get_posts(["title" => "Codespark QA sample", "post_status" => "publish", "numberposts" => 1]); echo $p ? $p[0]->ID : 0;' | tail -n1 | tr -d '\r'
+}
+no_comment_form() {
+  local path html
+  path="$(sample_post_path)"
+  [ -n "$path" ] || return 1
+  html="$(curl -s --max-time 20 "$BASE$path")"
   [ -n "$html" ] && ! grep -q 'id="respond"' <<<"$html" && ! grep -qi '<form[^>]*comment' <<<"$html"
 }
-file_edit_disabled() { [ "$(wp eval 'echo (int) DISALLOW_FILE_EDIT;' | tail -n1 | tr -d '')" = 1 ]; }
+pingback_header_absent() {
+  local path; path="$(sample_post_path)"
+  [ -n "$path" ] || return 1
+  curl -s -o /dev/null -D - --max-time 20 "$BASE$path" | grep -qi '^HTTP/.* 200' || return 1
+  ! curl -s -o /dev/null -D - --max-time 20 "$BASE$path" | grep -qi '^X-Pingback'
+}
+trackback_closed() {
+  local path; path="$(sample_post_path)"
+  [ -n "$path" ] || return 1
+  post_is_blocked /wp-trackback.php && post_is_blocked "${path}trackback/"
+}
+users_sitemap_gone() {
+  [ "$(http_status /wp-sitemap-users-1.xml)" = 404 ] && ! curl -s --max-time 20 "$BASE/wp-sitemap.xml" | grep -q 'users'
+}
+rest_embed_no_author() {
+  local id body
+  id="$(sample_post_id)"
+  [ "${id:-0}" != 0 ] || return 1
+  body="$(curl -s --max-time 20 "$BASE/wp-json/wp/v2/posts/$id?_embed")"
+  grep -q '"id":' <<<"$body" || return 1
+  ! grep -q '"_embedded":{"author"' <<<"$body" && ! grep -q 'mf_codespark_qa' <<<"$body"
+}
+file_edit_disabled() { [ "$(wp eval 'echo (int) DISALLOW_FILE_EDIT;' | tail -n1 | tr -d '\r')" = 1 ]; }
 
 # ---- checks ----
 check       home_200         status_is / 200
@@ -78,7 +105,10 @@ check       users_rest_hidden      users_rest_hidden
 check       author_enum_blocked    author_enum_blocked
 check       headers                headers_ok
 check_local no_comment_form        no_comment_form
-check       pingback_header_absent bash -c '! curl -s -D - -o /dev/null --max-time 20 "$0" | grep -qi "^X-Pingback"' "$BASE/"
+check_local pingback_header_absent pingback_header_absent
+check_local trackback_closed       trackback_closed
+check       users_sitemap_gone     users_sitemap_gone
+check_local rest_embed_no_author   rest_embed_no_author
 check_local file_edit_disabled     file_edit_disabled
 
 # ---- summary ----

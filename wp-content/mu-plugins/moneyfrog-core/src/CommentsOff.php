@@ -7,7 +7,7 @@ namespace MoneyfrogCore;
  */
 final class CommentsOff
 {
-    private const BLOCKED_SCRIPTS = ['wp-comments-post.php', 'xmlrpc.php'];
+    private const BLOCKED_SCRIPTS = ['wp-comments-post.php', 'xmlrpc.php', 'wp-trackback.php'];
 
     public static function register(): void
     {
@@ -69,7 +69,7 @@ final class CommentsOff
 
     public static function blockCommentFeeds(): void
     {
-        if (is_feed() && is_comment_feed()) {
+        if ((is_feed() && is_comment_feed()) || is_trackback()) {
             wp_die('Not found', 'Not found', ['response' => 404]);
         }
     }

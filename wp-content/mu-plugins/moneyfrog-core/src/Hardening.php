@@ -29,6 +29,8 @@ final class Hardening
     {
         add_filter('xmlrpc_enabled', '__return_false');
         add_filter('rest_endpoints', [self::class, 'filterRestEndpoints']);
+        add_filter('wp_sitemaps_add_provider', [self::class, 'dropUsersSitemap'], 10, 2);
+        add_action('rest_api_init', [self::class, 'hideAuthorLinks']);
         add_action('template_redirect', [self::class, 'blockAuthorEnumeration'], 0);
         add_action('send_headers', [self::class, 'sendSecurityHeaders']);
 
@@ -54,6 +56,24 @@ final class Hardening
         return $endpoints;
     }
 
+    public static function dropUsersSitemap(mixed $provider, string $name): mixed
+    {
+        return $name === 'users' ? false : $provider;
+    }
+
+    /** Logged-out REST responses carry no author link, so _embed adds no user data. */
+    public static function hideAuthorLinks(): void
+    {
+        foreach (get_post_types(['show_in_rest' => true]) as $type) {
+            add_filter("rest_prepare_{$type}", static function ($response) {
+                if (!is_user_logged_in() && $response instanceof \WP_REST_Response) {
+                    $response->remove_link('author');
+                }
+                return $response;
+            });
+        }
+    }
+
     public static function blockAuthorEnumeration(): void
     {
         global $wp_query;
@@ -73,7 +93,7 @@ final class Hardening
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Content-Security-Policy: ' . self::CSP);
-        if (is_ssl()) {
+        if (ClientIp::isHttps($_SERVER)) {
             header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
         }
     }
@@ -81,7 +101,7 @@ final class Hardening
     /** Runs after core's credential checks so a block cannot be overridden by them. */
     public static function rejectIfRateLimited(mixed $user): mixed
     {
-        if (self::failureRecord()['count'] >= self::LOGIN_MAX_FAILURES) {
+        if (self::limiter()->isBlocked(self::limiterKey())) {
             return new \WP_Error(
                 'mf_too_many_attempts',
                 'Too many failed login attempts. Please try again in a few minutes.'
@@ -92,35 +112,32 @@ final class Hardening
 
     public static function recordFailure(): void
     {
-        $record = self::failureRecord();
-        if ($record['count'] >= self::LOGIN_MAX_FAILURES) {
-            return; // already blocked; do not extend the window
-        }
-        $expires = $record['expires'] ?: time() + self::LOGIN_WINDOW_SECONDS;
-        set_transient(
-            self::transientKey(),
-            ['count' => $record['count'] + 1, 'expires' => $expires],
-            max(1, $expires - time())
-        );
+        self::limiter()->recordFailure(self::limiterKey());
     }
 
     public static function clearFailures(): void
     {
-        delete_transient(self::transientKey());
+        self::limiter()->clear(self::limiterKey());
     }
 
-    /** @return array{count:int,expires:int} */
-    private static function failureRecord(): array
+    private static function limiter(): LoginLimiter
     {
-        $record = get_transient(self::transientKey());
-        if (!is_array($record) || ($record['expires'] ?? 0) <= time()) {
-            return ['count' => 0, 'expires' => 0];
-        }
-        return ['count' => (int) $record['count'], 'expires' => (int) $record['expires']];
+        return new LoginLimiter(
+            static fn (string $key) => get_transient($key),
+            static function (string $key, array $record, int $ttl): void {
+                set_transient($key, $record, $ttl);
+            },
+            static function (string $key): void {
+                delete_transient($key);
+            },
+            static fn (): int => time(),
+            self::LOGIN_MAX_FAILURES,
+            self::LOGIN_WINDOW_SECONDS
+        );
     }
 
-    private static function transientKey(): string
+    private static function limiterKey(): string
     {
-        return 'mf_login_fail_' . md5((string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        return 'mf_login_fail_' . md5(ClientIp::resolve($_SERVER));
     }
 }
