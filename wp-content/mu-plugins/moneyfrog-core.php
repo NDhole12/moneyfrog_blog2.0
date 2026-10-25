@@ -18,6 +18,8 @@ if (defined('WP_CLI') && WP_CLI) {
         require_once $moneyfrog_core_file;
     }
     WP_CLI::add_command('mf import', \MoneyfrogCore\Cli\ImportCommand::class);
+    WP_CLI::add_command('mf audit', \MoneyfrogCore\Cli\AuditCommand::class);
+    WP_CLI::add_command('mf warm', \MoneyfrogCore\Cli\WarmCommand::class);
 }
 
 \MoneyfrogCore\Hardening::register();
@@ -26,6 +28,7 @@ if (defined('WP_CLI') && WP_CLI) {
 \MoneyfrogCore\Byline::register();
 \MoneyfrogCore\ContentHooks::register();
 \MoneyfrogCore\ServiceUser::register();
+\MoneyfrogCore\Release::register();
 
 // Marker header on REST responses, used by the smoke tests.
 add_filter('rest_post_dispatch', static function ($response) {

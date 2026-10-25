@@ -2,11 +2,23 @@
 # Smoke checks for the Moneyfrog blog. Usage: tests/smoke/smoke.sh <base-url>
 # Each check prints exactly "PASS <name>" or "FAIL <name>"; local-only checks
 # print "SKIP <name>" when the base URL is not localhost.
+#
+# Against staging/LIVE (any non-local base) the HTTP-only checks run; WP-CLI-dependent
+# ones are skipped. Optional environment:
+#   SMOKE_AUTH=user:pass     HTTP basic auth (staging); passed to curl, never printed
+#   SMOKE_SAMPLE_POST=/slug/ path of a published post; enables the single-post checks remotely
+#   SMOKE_BOM_PATH=/slug%ef%bb%bf/  an old BOM URL that must 301 to SMOKE_SAMPLE_POST
+#   EXPECT_SHA=<40-hex>      the release the server must report in X-MF-Release
 BASE="${1:-http://localhost:8080}"
 BASE="${BASE%/}"
 FAILS=0
 PASSES=0
 SKIPS=0
+
+# Every curl call goes through this wrapper so SMOKE_AUTH applies to all of them.
+curl() {
+  if [ -n "${SMOKE_AUTH:-}" ]; then command curl -u "$SMOKE_AUTH" "$@"; else command curl "$@"; fi
+}
 
 is_local() {
   [[ "$BASE" =~ ^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$ ]]
@@ -24,6 +36,18 @@ check() {
 check_local() {
   local name="$1"; shift
   if is_local; then check "$name" "$@"; else echo "SKIP $name"; SKIPS=$((SKIPS + 1)); fi
+}
+
+# Remote-only check (the local site has fixtures instead).
+check_remote() {
+  local name="$1"; shift
+  if is_local; then echo "SKIP $name"; SKIPS=$((SKIPS + 1)); else check "$name" "$@"; fi
+}
+
+# Runs locally always; remotely only when SMOKE_SAMPLE_POST names a published post.
+check_sample() {
+  local name="$1"; shift
+  if is_local || [ -n "${SMOKE_SAMPLE_POST:-}" ]; then check "$name" "$@"; else echo "SKIP $name"; SKIPS=$((SKIPS + 1)); fi
 }
 
 # helpers
@@ -55,6 +79,7 @@ headers_ok() {
   if ! is_local; then grep -qi '^Strict-Transport-Security:' <<<"$h" || return 1; fi
 }
 sample_post_path() {
+  if ! is_local; then printf '%s' "${SMOKE_SAMPLE_POST:-}"; return; fi
   wp eval '
     $p = get_posts(["title" => "Codespark QA sample", "post_status" => "publish", "numberposts" => 1]);
     $id = $p ? $p[0]->ID : wp_insert_post(["post_title" => "Codespark QA sample", "post_content" => "Sample body.", "post_status" => "publish"]);
@@ -181,6 +206,8 @@ advisor_cta() { home_html | tr '
 SINGLE_DEC=/market-outlook-december-2025/
 SINGLE_H2_POST=/tax-benefit-on-home-loan-section-24-80ee-80c/   # real post with 3 <h2>, so a TOC
 SINGLE_IMG_POST=/market-outlook-may-2023/                       # real post with a featured image
+# Remotely the generic single-post checks run against the published post named by SMOKE_SAMPLE_POST.
+is_local || SINGLE_DEC="${SMOKE_SAMPLE_POST:-/}"
 single_html() { curl -s --max-time 30 "$BASE$1"; }
 single_flat() { single_html "$1" | tr '\n' ' ' | tr -s ' '; }
 single_has_disclaimer() {
@@ -215,9 +242,22 @@ single_no_spam() {
   [ -n "$h" ] || return 1
   ! grep -qi 'casino' <<<"$h" && ! looks_german "$h"     && looks_german '<p>Dies ist ein Text und die Seite ist nicht für den Spieler mit dem Bonus</p>'     && ! looks_german '<p>Markets rose in the month and the index closed at a record high for the year</p>'
 }
-single_byline() { local h; h="$(single_flat "$SINGLE_DEC")"; grep -q 'Mushtaq Kazi' <<<"$h" && grep -q '>MK<' <<<"$h" && grep -q 'href="[^"]*/author/mushtaq-kazi/"' <<<"$h"; }
+single_byline() {
+  local h; h="$(single_flat "$SINGLE_DEC")"
+  if ! is_local; then
+    grep -qE 'href="[^"]*/author/[a-z0-9-]+/"' <<<"$h" && ! grep -qE 'href="[^"]*/(author|wp-user)/[a-z0-9_]*[0-9]+/?"' <<<"$h"
+    return
+  fi
+  grep -q 'Mushtaq Kazi' <<<"$h" && grep -q '>MK<' <<<"$h" && grep -q 'href="[^"]*/author/mushtaq-kazi/"' <<<"$h"
+}
 single_jsonld() {
   local ld
+  if ! is_local; then
+    ld="$(single_html "$SINGLE_DEC" | tr '\n' ' ' | sed -n 's#.*<script type="application/ld+json">\(.*\)</script>.*#\1#p' | sed 's#</script>.*##')"
+    grep -q '"@type":"BlogPosting"' <<<"$ld" && grep -q '"datePublished":"[0-9-]*T[0-9:]*+05:30"' <<<"$ld" \
+      && grep -q '"author":{"@type":"Person","name":"[^"]\+"}' <<<"$ld" && grep -q '"publisher":{"@type":"Organization","name":"Moneyfrog"' <<<"$ld"
+    return
+  fi
   ld="$(single_html "$SINGLE_DEC" | tr '\n' ' ' | sed -n 's#.*<script type="application/ld+json">\(.*\)</script>.*#\1#p' | sed 's#</script>.*##')"
   grep -q '"@type":"BlogPosting"' <<<"$ld" && grep -q '"datePublished":"2025-12-[0-9T:]*+05:30"' <<<"$ld" \
     && grep -q '"dateModified":"[0-9T:-]*+05:30"' <<<"$ld" && grep -q '"headline":"Market Outlook – December 2025"' <<<"$ld" \
@@ -229,6 +269,13 @@ single_no_comments() {
 }
 single_old_bom_url_redirects() {
   local code loc
+  if ! is_local; then
+    [ -n "${SMOKE_BOM_PATH:-}" ] || return 1
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE$SMOKE_BOM_PATH")"
+    loc="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 20 "$BASE$SMOKE_BOM_PATH")"
+    [ "$code" = 301 ] && [ "$loc" = "$BASE$SINGLE_DEC" ] && [ "$(http_status "$SINGLE_DEC")" = 200 ]
+    return
+  fi
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/market-outlook-december-2025%ef%bb%bf/")"
   loc="$(curl -s -o /dev/null -w '%{redirect_url}' --max-time 20 "$BASE/market-outlook-december-2025%ef%bb%bf/")"
   [ "$code" = 301 ] && [ "$loc" = "$BASE$SINGLE_DEC" ] && [ "$(http_status "$SINGLE_DEC")" = 200 ]
@@ -263,6 +310,12 @@ single_meta_description() {
 }
 single_og_tags() {
   local h; h="$(single_html "$SINGLE_DEC")"
+  if ! is_local; then
+    grep -q '<meta property="og:type" content="article">' <<<"$h" && grep -q '<meta property="og:title" content="[^"]\+">' <<<"$h" \
+      && grep -q "<meta property=\"og:url\" content=\"$BASE$SINGLE_DEC\">" <<<"$h" && grep -q '<meta property="og:site_name" content="Moneyfrog Insights">' <<<"$h" \
+      && grep -q '<meta property="article:published_time" content="[0-9T:-]*+05:30">' <<<"$h" && grep -q '<meta name="twitter:card" content="summary_large_image">' <<<"$h"
+    return
+  fi
   grep -q '<meta property="og:type" content="article">' <<<"$h"     && grep -q '<meta property="og:title" content="Market Outlook – December 2025">' <<<"$h"     && grep -q '<meta property="og:description" content="[^"]\+">' <<<"$h"     && grep -q "<meta property=\"og:url\" content=\"$BASE$SINGLE_DEC\">" <<<"$h"     && grep -q '<meta property="og:site_name" content="Moneyfrog Insights">' <<<"$h"     && grep -q '<meta property="og:image" content="[^"]*/wp-content/uploads/2025/12/' <<<"$h"     && grep -q '<meta property="article:published_time" content="2025-12-[0-9T:]*+05:30">' <<<"$h"     && grep -q '<meta property="article:modified_time" content="[0-9T:-]*+05:30">' <<<"$h"     && grep -q '<meta name="twitter:card" content="summary_large_image">' <<<"$h"
 }
 category_meta_description() {
@@ -270,27 +323,63 @@ category_meta_description() {
 }
 single_one_h1() { [ "$(single_html "$SINGLE_DEC" | grep -o '<h1[ >]' | wc -l | tr -d ' ')" = 1 ]; }
 
+release_header_value() { curl -s -D - -o /dev/null --max-time 20 "$BASE/" | tr -d '\r' | sed -n 's/^[Xx]-[Mm][Ff]-[Rr]elease: *//p' | head -n1; }
+# Remote: X-MF-Release must equal the first 12 chars of EXPECT_SHA. Local: the header appears with a
+# temporary wp-content/.mf-release and is absent without one.
+release_header() {
+  if ! is_local; then
+    [[ "${EXPECT_SHA:-}" =~ ^[0-9a-f]{40}$ ]] && [ "$(release_header_value)" = "${EXPECT_SHA:0:12}" ]
+    return
+  fi
+  local sha=0123456789abcdef0123456789abcdef01234567 with without
+  wp eval '@unlink(WP_CONTENT_DIR . "/.mf-release");' >/dev/null 2>&1
+  without="$(release_header_value)"
+  wp eval 'file_put_contents(WP_CONTENT_DIR . "/.mf-release", "'"$sha"'\n");' >/dev/null 2>&1 || return 1
+  with="$(release_header_value)"
+  wp eval '@unlink(WP_CONTENT_DIR . "/.mf-release");' >/dev/null 2>&1
+  [ -z "$without" ] && [ "$with" = "${sha:0:12}" ]
+}
+# Behaviour test of `wp mf audit`: an editor without two-factor is reported, one with it is not,
+# and the importer's service account is never reported. Uses temporary users and removes them.
+audit_missing() { wp mf audit 2>/dev/null | tr -d '\n ' | sed -n 's/.*"two_factor_missing":\[\([^]]*\)\].*/\1/p'; }
+two_factor_enforced() {
+  local out ok=1 made_svc=0
+  wp user get mf-import >/dev/null 2>&1 || { wp user create mf-import mf-import@example.invalid --role=editor --porcelain >/dev/null 2>&1 && made_svc=1; }
+  wp user create mf_codespark_qa_2fa qa-2fa@example.invalid --role=editor --porcelain >/dev/null 2>&1 || return 1
+  out="$(audit_missing)"
+  grep -q 'mf_codespark_qa_2fa' <<<"$out" || ok=0
+  grep -q 'mf-import' <<<"$out" && ok=0
+  wp user meta update mf_codespark_qa_2fa _two_factor_enabled_providers '["Two_Factor_Totp"]' --format=json >/dev/null 2>&1
+  out="$(audit_missing)"
+  grep -q 'mf_codespark_qa_2fa' <<<"$out" && ok=0
+  wp user delete mf_codespark_qa_2fa --yes >/dev/null 2>&1
+  [ "$made_svc" = 1 ] && wp user delete mf-import --yes >/dev/null 2>&1
+  [ "$ok" = 1 ]
+}
+audit_runs() { wp mf audit 2>/dev/null | tr -d '\n ' | grep -q '"php":"8\.3[^"]*".*"blog_public":'; }
+remote_listing_pages() { [ "$(http_status /category/mutual-funds/)" = 200 ] && [ "$(http_status '/?s=SIP')" = 200 ]; }
+
 # shellcheck source=tests/smoke/import-checks.sh
 source "$(dirname "$0")/import-checks.sh"
 
 # ---- checks ----
 # Real-content checks first, on a site with no QA fixtures; fixtures are seeded after and removed again at exit.
 is_local && remove_fixtures
-check_local single_has_disclaimer           single_has_disclaimer
+check_sample single_has_disclaimer           single_has_disclaimer
 check_local single_toc                      single_toc
 check_local single_toc_absent_ok            single_toc_absent_ok
-check_local single_no_spam                  single_no_spam
-check_local single_byline                   single_byline
-check_local single_jsonld                   single_jsonld
-check_local single_no_comments              single_no_comments
-check_local single_old_bom_url_redirects    single_old_bom_url_redirects
+check_sample single_no_spam                  single_no_spam
+check_sample single_byline                   single_byline
+check_sample single_jsonld                   single_jsonld
+check_sample single_no_comments              single_no_comments
+if is_local || [ -n "${SMOKE_BOM_PATH:-}" ]; then check single_old_bom_url_redirects single_old_bom_url_redirects; else echo "SKIP single_old_bom_url_redirects"; SKIPS=$((SKIPS + 1)); fi
 check_local single_hero                     single_hero
-check_local single_share                    single_share
-check_local single_progress                 single_progress
+check_sample single_share                    single_share
+check_sample single_progress                 single_progress
 check_local single_related                  single_related
-check_local single_one_h1                   single_one_h1
-check_local single_meta_description        single_meta_description
-check_local single_og_tags                 single_og_tags
+check_sample single_one_h1                   single_one_h1
+check_sample single_meta_description        single_meta_description
+check_sample single_og_tags                 single_og_tags
 check_local category_meta_description     category_meta_description
 
 is_local && seed_fixtures
@@ -305,12 +394,16 @@ check       comment_feed_gone      status_is /comments/feed/ 404
 check       users_rest_hidden      users_rest_hidden
 check       author_enum_blocked    author_enum_blocked
 check       headers                headers_ok
-check_local no_comment_form        no_comment_form
-check_local pingback_header_absent pingback_header_absent
-check_local trackback_closed       trackback_closed
+check_sample no_comment_form        no_comment_form
+check_sample pingback_header_absent pingback_header_absent
+check_sample trackback_closed       trackback_closed
 check       users_sitemap_gone     users_sitemap_gone
 check_local rest_embed_no_author   rest_embed_no_author
 check_local file_edit_disabled     file_edit_disabled
+check_local two_factor_enforced     two_factor_enforced
+check_local audit_runs              audit_runs
+if is_local || [ -n "${EXPECT_SHA:-}" ]; then check release_header release_header; else echo "SKIP release_header"; SKIPS=$((SKIPS + 1)); fi
+check_remote listing_pages          remote_listing_pages
 check_local redirect_hook_live      redirect_hook_live
 check_local bom_variant_redirects      bom_variant_redirects
 check_local core_author_archive_hidden core_author_archive_hidden

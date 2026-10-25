@@ -6,6 +6,8 @@
 # Uses plain curl GETs (no WP-CLI), so it works against local, staging and LIVE alike.
 # Prints "FAIL <url> <status chain>" per bad URL and a total; exits non-zero on any FAIL.
 set -u
+# Optional SMOKE_AUTH=user:pass enables HTTP basic auth (staging); it is passed to curl and never printed.
+curl() { if [ -n "${SMOKE_AUTH:-}" ]; then command curl -u "$SMOKE_AUTH" "$@"; else command curl "$@"; fi; }
 BASE="${1:-}"
 LIST="${2:-}"
 if [ -z "$BASE" ] || [ -z "$LIST" ] || [ ! -f "$LIST" ]; then
