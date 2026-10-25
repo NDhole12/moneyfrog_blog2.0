@@ -1,7 +1,7 @@
 <?php
 /**
  * Typographic cover for posts without a featured image.
- * Args: ['title' => string, 'topic' => string, 'variant' => 'cream'|'night', 'size' => 'hero'|''].
+ * Args: ['title' => string, 'topic' => string, 'variant' => 'cream'|'night'].
  */
 
 use MoneyfrogCore\Content;
@@ -13,7 +13,6 @@ if (!defined('ABSPATH')) {
 $title   = (string) ($args['title'] ?? '');
 $topic   = (string) ($args['topic'] ?? '');
 $variant = ($args['variant'] ?? 'cream') === 'night' ? 'night' : 'cream';
-$hero    = ($args['size'] ?? '') === 'hero' ? ' mf-cover--hero' : '';
 $phrase  = Content::coverPhrase($title, $topic);
 $label   = $variant === 'night' ? $topic : 'Moneyfrog Insights';
 
@@ -26,7 +25,7 @@ if ($variant === 'night' && str_contains($phrase, ' ')) {
     $tail = substr($phrase, $cut + 1);
 }
 ?>
-<div class="mf-cover mf-cover--<?php echo esc_attr($variant); ?><?php echo esc_attr($hero); ?>" aria-hidden="true">
+<div class="mf-cover mf-cover--<?php echo esc_attr($variant); ?>" aria-hidden="true">
     <span class="mf-cover__label"><?php echo esc_html($label); ?></span>
     <span class="mf-cover__phrase"><?php echo esc_html($head); ?><?php echo $tail !== '' ? '<span>' . esc_html($tail) . '</span>' : ''; ?></span>
 </div>

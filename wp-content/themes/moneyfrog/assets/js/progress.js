@@ -5,8 +5,7 @@
   var article = document.querySelector('article.post .entry-content');
   if (!bar || !article) { return; }
   var fill = bar.querySelector('.read-progress__bar');
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) { bar.classList.add('is-static'); }
+  // Smooth bar transitions live in CSS behind prefers-reduced-motion: no-preference; this script sets the value directly.
   var ticking = false;
 
   function percent() {

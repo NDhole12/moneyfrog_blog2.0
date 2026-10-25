@@ -38,7 +38,8 @@ function mf_post_jsonld(WP_Post $post): array
         'publisher'        => ['@type' => 'Organization', 'name' => 'Moneyfrog', 'logo' => ['@type' => 'ImageObject', 'url' => $logo]],
         'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => get_permalink($post)],
     ];
-    $image = get_the_post_thumbnail_url($post, 'full');
+    $imageId = mf_card_image_id($post->ID);
+    $image   = $imageId > 0 ? wp_get_attachment_url($imageId) : false;
     if (is_string($image) && $image !== '') {
         $data['image'] = $image;
     }
@@ -58,28 +59,37 @@ add_action('wp_head', static function (): void {
     }
 }, 5);
 
-/** Older and newer posts in the same topic, by date (null when there is none). */
+/**
+ * Older and newer posts in the same topic. Ordered by (date, ID) so posts sharing a timestamp
+ * still have one stable neighbour each way and a post is never both previous and next.
+ */
 function mf_adjacent_posts(WP_Post $post, ?WP_Term $topic): array
 {
     $none = ['prev' => null, 'next' => null];
     if (!$topic) {
         return $none;
     }
-    $find = static function (array $date, string $order) use ($post, $topic): ?WP_Post {
+    $find = static function (string $cmp, string $order) use ($post, $topic): ?WP_Post {
+        $where = static function (string $sql) use ($post, $cmp): string {
+            global $wpdb;
+            return $sql . $wpdb->prepare(
+                " AND ({$wpdb->posts}.post_date {$cmp} %s OR ({$wpdb->posts}.post_date = %s AND {$wpdb->posts}.ID {$cmp} %d))",
+                $post->post_date,
+                $post->post_date,
+                $post->ID
+            );
+        };
+        add_filter('posts_where', $where);
         $found = mf_query_posts([
             'cat'            => $topic->term_id,
             'posts_per_page' => 1,
-            'post__not_in'   => [$post->ID],
             'orderby'        => ['date' => $order, 'ID' => $order],
-            'order'          => $order,
-            'date_query'     => [$date + ['inclusive' => true]],
+            'suppress_filters' => false,
         ]);
+        remove_filter('posts_where', $where);
         return $found[0] ?? null;
     };
-    return [
-        'prev' => $find(['before' => $post->post_date], 'DESC'),
-        'next' => $find(['after' => $post->post_date], 'ASC'),
-    ];
+    return ['prev' => $find('<', 'DESC'), 'next' => $find('>', 'ASC')];
 }
 
 /** Keep reading: the three newest posts in the same topic, excluding this one. */

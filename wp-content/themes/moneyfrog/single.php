@@ -38,7 +38,7 @@ while (have_posts()) :
                 <a href="<?php echo esc_url(home_url('/')); ?>">Insights</a>
                 <?php if ($topic && !is_wp_error($topicUrl)) : ?>
                     <span aria-hidden="true">/</span>
-                    <a href="<?php echo esc_url($topicUrl); ?>"><?php echo esc_html($topic->name); ?></a>
+                    <a href="<?php echo esc_url($topicUrl); ?>" aria-current="page"><?php echo esc_html($topic->name); ?></a>
                 <?php endif; ?>
             </nav>
             <p class="eyebrow post-head__eyebrow"><?php echo esc_html($c['topic'] . ' · ' . get_the_date('F Y', $post)); ?></p>
@@ -60,15 +60,11 @@ while (have_posts()) :
             </div>
         </header>
 
+        <?php if (has_post_thumbnail($post)) : // No featured image, no hero: the post's own first image already opens the article. ?>
         <div class="post-hero">
-            <?php
-            if (has_post_thumbnail($post)) {
-                echo get_the_post_thumbnail($post, 'mf-hero', ['alt' => $alt !== '' ? $alt : $c['title'], 'loading' => 'eager', 'fetchpriority' => 'high', 'decoding' => 'async']); // phpcs:ignore WordPress.Security.EscapeOutput -- core-generated <img>.
-            } else {
-                get_template_part('template-parts/cover', null, ['title' => $c['title'], 'topic' => $c['topic'], 'variant' => $c['variant'], 'size' => 'hero']);
-            }
-            ?>
+            <?php echo get_the_post_thumbnail($post, 'mf-hero', ['alt' => $alt !== '' ? $alt : $c['title'], 'loading' => 'eager', 'fetchpriority' => 'high', 'decoding' => 'async']); // phpcs:ignore WordPress.Security.EscapeOutput -- core-generated <img>. ?>
         </div>
+        <?php endif; ?>
 
         <div class="post-body<?php echo $toc === [] ? ' post-body--solo' : ''; ?>">
             <?php if ($toc !== []) : ?>

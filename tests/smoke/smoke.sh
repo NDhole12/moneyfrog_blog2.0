@@ -150,6 +150,7 @@ not_found_themed() {
 }
 
 seed_fixtures() { bash tests/fixtures/seed.sh "$BASE" >/dev/null 2>&1; }
+remove_fixtures() { bash tests/fixtures/seed.sh --remove "$BASE" >/dev/null 2>&1; }
 home_sections() {
   local h; h="$(home_html)"
   grep -q 'Codespark QA – Market Outlook: October 2026' <<<"$h" || return 1
@@ -199,7 +200,21 @@ single_toc_absent_ok() {
   h="$(single_flat "$SINGLE_DEC")"
   ! grep -q 'aria-label="On this page"' <<<"$h" && ! grep -qiE '(Fatal error|Warning|Notice|Deprecated):' <<<"$h" && grep -q 'class="entry-content"' <<<"$h"
 }
-single_no_spam() { local h; h="$(single_flat "$SINGLE_DEC")"; [ -n "$h" ] && ! grep -qiE 'betalice|casino' <<<"$h"; }
+# A paragraph is "German-looking" when it has 3+ German stopwords from 2+ distinct words (no spam brand is named anywhere).
+looks_german() {
+  local para n d words='und|der|die|das|nicht|ist|sind|mit|für|auch|ein|eine|wir|bei|von|zu|den|dem|des|sich|auf'
+  while IFS= read -r para; do
+    n="$(grep -owiE "\b($words)\b" <<<"$para" | wc -l | tr -d ' ')"
+    d="$(grep -owiE "\b($words)\b" <<<"$para" | tr 'A-Z' 'a-z' | sort -u | wc -l | tr -d ' ')"
+    if [ "$n" -ge 3 ] && [ "$d" -ge 2 ]; then return 0; fi
+  done < <(sed 's#</p>#\n#g; s#<[^>]*>##g' <<<"$1")
+  return 1
+}
+single_no_spam() {
+  local h; h="$(single_html "$SINGLE_DEC")"
+  [ -n "$h" ] || return 1
+  ! grep -qi 'casino' <<<"$h" && ! looks_german "$h"     && looks_german '<p>Dies ist ein Text und die Seite ist nicht für den Spieler mit dem Bonus</p>'     && ! looks_german '<p>Markets rose in the month and the index closed at a record high for the year</p>'
+}
 single_byline() { local h; h="$(single_flat "$SINGLE_DEC")"; grep -q 'Mushtaq Kazi' <<<"$h" && grep -q '>MK<' <<<"$h" && grep -q 'href="[^"]*/author/mushtaq-kazi/"' <<<"$h"; }
 single_jsonld() {
   local ld
@@ -221,7 +236,7 @@ single_old_bom_url_redirects() {
 single_hero() {
   local a b
   a="$(single_flat "$SINGLE_DEC")"; b="$(single_flat "$SINGLE_IMG_POST")"
-  grep -q 'class="post-hero"' <<<"$a" && grep -q 'class="mf-cover mf-cover--[a-z]* mf-cover--hero"' <<<"$a" || return 1
+  ! grep -q 'class="post-hero"' <<<"$a" && ! grep -q 'mf-cover--hero' <<<"$a" || return 1
   grep -q 'class="post-hero"' <<<"$b" && grep -qE '<img[^>]*class="[^"]*wp-post-image' <<<"$b" && grep -qE 'wp-post-image[^>]*alt="[^"]+"|alt="[^"]+"[^>]*wp-post-image' <<<"$b"
 }
 single_share() {
@@ -240,13 +255,46 @@ single_related() {
   grep -q '>Keep reading<' <<<"$h" && [ "$(grep -o 'class="card card--default"' <<<"$h" | wc -l | tr -d ' ')" = 3 ] \
     && grep -q 'aria-label="Previous and next articles"' <<<"$h" && grep -q 'Talk to an advisor' <<<"$h"
 }
+single_meta_description() {
+  local h d
+  h="$(single_html "$SINGLE_DEC")"
+  d="$(grep -o '<meta name="description" content="[^"]*"' <<<"$h" | sed 's/.*content="//; s/"$//; s/&amp;/\&/g')"
+  [ -n "$d" ] && [ "$(printf '%s' "$d" | LC_ALL=C tr -d '\200-\277' | LC_ALL=C wc -c | tr -d ' ')" -le 160 ] && [ "$(grep -c '<meta name="description"' <<<"$h")" = 1 ]
+}
+single_og_tags() {
+  local h; h="$(single_html "$SINGLE_DEC")"
+  grep -q '<meta property="og:type" content="article">' <<<"$h"     && grep -q '<meta property="og:title" content="Market Outlook – December 2025">' <<<"$h"     && grep -q '<meta property="og:description" content="[^"]\+">' <<<"$h"     && grep -q "<meta property=\"og:url\" content=\"$BASE$SINGLE_DEC\">" <<<"$h"     && grep -q '<meta property="og:site_name" content="Moneyfrog Insights">' <<<"$h"     && grep -q '<meta property="og:image" content="[^"]*/wp-content/uploads/2025/12/' <<<"$h"     && grep -q '<meta property="article:published_time" content="2025-12-[0-9T:]*+05:30">' <<<"$h"     && grep -q '<meta property="article:modified_time" content="[0-9T:-]*+05:30">' <<<"$h"     && grep -q '<meta name="twitter:card" content="summary_large_image">' <<<"$h"
+}
+category_meta_description() {
+  curl -s --max-time 20 "$BASE/category/market-outlook/" | grep -q '<meta name="description" content="[^"]\+">'     && home_html | grep -q '<meta name="description" content="[^"]\+">'
+}
 single_one_h1() { [ "$(single_html "$SINGLE_DEC" | grep -o '<h1[ >]' | wc -l | tr -d ' ')" = 1 ]; }
 
 # shellcheck source=tests/smoke/import-checks.sh
 source "$(dirname "$0")/import-checks.sh"
 
 # ---- checks ----
+# Real-content checks first, on a site with no QA fixtures; fixtures are seeded after and removed again at exit.
+is_local && remove_fixtures
+check_local single_has_disclaimer           single_has_disclaimer
+check_local single_toc                      single_toc
+check_local single_toc_absent_ok            single_toc_absent_ok
+check_local single_no_spam                  single_no_spam
+check_local single_byline                   single_byline
+check_local single_jsonld                   single_jsonld
+check_local single_no_comments              single_no_comments
+check_local single_old_bom_url_redirects    single_old_bom_url_redirects
+check_local single_hero                     single_hero
+check_local single_share                    single_share
+check_local single_progress                 single_progress
+check_local single_related                  single_related
+check_local single_one_h1                   single_one_h1
+check_local single_meta_description        single_meta_description
+check_local single_og_tags                 single_og_tags
+check_local category_meta_description     category_meta_description
+
 is_local && seed_fixtures
+trap 'is_local && remove_fixtures' EXIT
 is_local && import_scenario
 check       home_200         status_is / 200
 check_local php_8_3          php_version_ok
@@ -282,19 +330,6 @@ check_local search_works       search_works
 check       newsletter_hidden  newsletter_hidden
 check       advisor_cta        advisor_cta
 
-check_local single_has_disclaimer           single_has_disclaimer
-check_local single_toc                      single_toc
-check_local single_toc_absent_ok            single_toc_absent_ok
-check_local single_no_spam                  single_no_spam
-check_local single_byline                   single_byline
-check_local single_jsonld                   single_jsonld
-check_local single_no_comments              single_no_comments
-check_local single_old_bom_url_redirects    single_old_bom_url_redirects
-check_local single_hero                     single_hero
-check_local single_share                    single_share
-check_local single_progress                 single_progress
-check_local single_related                  single_related
-check_local single_one_h1                   single_one_h1
 
 check_local import_dry_run_writes_nothing        import_dry_run_writes_nothing
 check_local import_first_run_creates              import_first_run_creates
