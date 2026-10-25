@@ -65,4 +65,42 @@ describe('slugs', () => {
       '/about/': '/',
     });
   });
+
+  it('collision loser never claims the winner live path (page older than post)', () => {
+    const assigned = assignSlugs([
+      { oldId: 1, type: 'page', slug: 'gilt-fund', oldPath: '/moneyfrog-school/gilt-fund/', date: '2019-01-01' },
+      { oldId: 2, type: 'post', slug: 'gilt-fund', oldPath: '/gilt-fund/', date: '2020-01-01' },
+    ]);
+    const post = assigned.find((a) => a.oldId === 2);
+    expect(post.newSlug).toBe('gilt-fund-2');
+    expect(post.oldPaths.map(normalisePath)).not.toContain('/gilt-fund/');
+    const map = buildRedirects(assigned, {}, {});
+    expect(map['/gilt-fund/']).toBeUndefined();
+    expect(map['/moneyfrog-school/gilt-fund/']).toBe('/gilt-fund/');
+  });
+
+  it('collision loser never claims the winner live path (post vs post, BOM twin)', () => {
+    const assigned = assignSlugs([
+      { oldId: 1, type: 'post', slug: 'x', oldPath: '/x/', date: '2020-01-01' },
+      { oldId: 2, type: 'post', slug: 'x%ef%bb%bf', oldPath: '/x%ef%bb%bf/', date: '2021-01-01' },
+    ]);
+    const loser = assigned.find((a) => a.oldId === 2);
+    expect(loser.newSlug).toBe('x-2');
+    expect(loser.oldPaths.map(normalisePath)).not.toContain('/x/');
+    expect(buildRedirects(assigned, {}, {})['/x/']).toBeUndefined();
+  });
+
+  it('empty cleaned slug falls back to item-<oldId>', () => {
+    const [a] = assignSlugs([{ oldId: 77, type: 'post', slug: '%ef%bb%bf', oldPath: '/%ef%bb%bf/', date: '2020-01-01' }]);
+    expect(a.newSlug).toBe('item-77');
+  });
+
+  it('school category and nested paths map to guides', () => {
+    const map = buildCategoryMap([
+      { id: 1, slug: 'moneyfrog-school', link: 'https://blog.moneyfrog.in/category/moneyfrog-school/' },
+      { id: 2, slug: 'financial-glossary', link: 'https://blog.moneyfrog.in/category/moneyfrog-school/financial-glossary/' },
+    ]);
+    expect(map['/category/moneyfrog-school/']).toBe('guides');
+    expect(map['/category/moneyfrog-school/financial-glossary/']).toBe('guides');
+  });
 });
