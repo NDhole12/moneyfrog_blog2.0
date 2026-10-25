@@ -5,19 +5,28 @@
 #
 # Against staging/LIVE (any non-local base) the HTTP-only checks run; WP-CLI-dependent
 # ones are skipped. Optional environment:
-#   SMOKE_AUTH=user:pass     HTTP basic auth (staging); passed to curl, never printed
+#   SMOKE_AUTH=user:pass     HTTP basic auth (staging); fed to curl on stdin, never in argv or output
 #   SMOKE_SAMPLE_POST=/slug/ path of a published post; enables the single-post checks remotely
 #   SMOKE_BOM_PATH=/slug%ef%bb%bf/  an old BOM URL that must 301 to SMOKE_SAMPLE_POST
 #   EXPECT_SHA=<40-hex>      the release the server must report in X-MF-Release
+#   SMOKE_ALLOW_SKIPS=1      remote run without EXPECT_SHA / SMOKE_SAMPLE_POST is an error unless this is set
 BASE="${1:-http://localhost:8080}"
 BASE="${BASE%/}"
 FAILS=0
 PASSES=0
 SKIPS=0
 
-# Every curl call goes through this wrapper so SMOKE_AUTH applies to all of them.
+# Basic auth goes to curl through a config on stdin (never argv, so it is not visible in `ps`),
+# and only for URLs on the base host: a redirect to another host is fetched without credentials.
 curl() {
-  if [ -n "${SMOKE_AUTH:-}" ]; then command curl -u "$SMOKE_AUTH" "$@"; else command curl "$@"; fi
+  local last="${!#}"
+  if [ -n "${SMOKE_AUTH:-}" ] && { [ "$last" = "$BASE" ] || [[ "$last" == "$BASE"/* ]] || [[ "$last" == "$BASE"\?* ]]; }; then
+    local esc="${SMOKE_AUTH//\\/\\\\}"
+    esc="${esc//\"/\\\"}"
+    printf 'user = "%s"\n' "$esc" | command curl -K - "$@"
+  else
+    command curl "$@"
+  fi
 }
 
 is_local() {
@@ -439,4 +448,9 @@ check_local service_user_login_blocked            service_user_login_blocked
 
 # ---- summary ----
 echo "Summary: $PASSES passed, $FAILS failed, $SKIPS skipped"
+echo "SKIPPED $SKIPS"
+if ! is_local && { [ -z "${EXPECT_SHA:-}" ] || [ -z "${SMOKE_SAMPLE_POST:-}" ]; }; then
+  echo "WARNING: remote run without EXPECT_SHA and SMOKE_SAMPLE_POST; the release and single-post checks were SKIPPED, so a pass is not a full pass." >&2
+  [ "${SMOKE_ALLOW_SKIPS:-}" = 1 ] || { echo "FAIL incomplete_remote_run (set both variables, or SMOKE_ALLOW_SKIPS=1 to accept)" >&2; exit 1; }
+fi
 [ "$FAILS" -eq 0 ]

@@ -5,18 +5,41 @@ A runbook for a shared Linux host (CloudLinux, Apache, per-docroot PHP handler, 
 | Placeholder | Meaning |
 |---|---|
 | `<STAGING_HOST>` / `<LIVE_HOST>` | public hostname of the staging / live blog |
+| `<SSH_HOST>` `<SSH_PORT>` `<USER>` | SSH endpoint and account |
 | `<ACCOUNT_HOME>` | the hosting account's home directory |
 | `<STAGING_ROOT>` / `<LIVE_ROOT>` | docroot of staging / live (becomes `STAGING_ROOT` / `LIVE_ROOT` in `infra/.env.deploy`) |
+| `<PHP83_BIN>` | the PHP 8.3 CLI binary on the server (cPanel hosts: `/opt/cpanel/ea-php83/root/usr/bin/php`) |
+| `<WP_PATH>` `<COMPOSER_PATH>` | the `wp` and `composer` executables on the server (`command -v wp`, `command -v composer`) |
 | `<DB_NAME>` `<DB_USER>` | new database and its least-privilege user |
 | `<ADMIN_LOGIN>` | administrator login chosen by the owner (**never `admin`**) |
 
 Rules that apply throughout: the old blog and the existing sites on this account are never touched, the account's PHP version for other sites never changes, and nothing here is run until the owner has approved the account.
 
+**PHP 8.3 for every command.** The server's default `php` may be older than 8.3. On the server, every session starts with:
+
+```sh
+WP='<PHP83_BIN> <WP_PATH>'
+COMPOSER='<PHP83_BIN> <COMPOSER_PATH>'
+```
+
+and every `wp` / `composer` command below is written `$WP ...` / `$COMPOSER ...`. For `infra/deploy.sh` the equivalent is `WP_BIN` / `COMPOSER_BIN` in `.env.deploy` (or `REMOTE_PATH_PREFIX`, the directory holding the 8.3 `php`).
+
 ## 0. Prerequisites (local)
 
 1. `infra/.env.deploy` exists locally, copied from `infra/.env.deploy.example` (git-ignored).
-2. The commit to deploy is pushed (`git ls-remote origin` shows it) and the working tree is clean.
-3. `migration/output/` holds `bundle.json` and `media/` (git-ignored; they travel by scp/rsync only).
+2. The commit to deploy is pushed (`git ls-remote origin` shows it) and the working tree is clean. LIVE only accepts a commit that is on `origin/main`; staging also accepts `origin/feat/blog-build` until it merges.
+3. `migration/output/` holds `bundle.json` and `media/` (git-ignored; they travel by rsync/scp only).
+
+### Pin the server host key (once, before the first deploy)
+
+`deploy.sh` runs ssh with `StrictHostKeyChecking=yes` by default, so the host key must already be in `known_hosts`. Pin it from a trusted comparison, not blindly:
+
+```sh
+ssh-keyscan -p <SSH_PORT> -t ed25519,rsa <SSH_HOST> > hostkeys.tmp
+ssh-keygen -lf hostkeys.tmp          # prints the SHA256 fingerprints
+```
+
+Compare those fingerprints **out of band** with the ones the hosting provider shows (or read them on the server console: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`). Only when they match, append the file to `~/.ssh/known_hosts` (`cat hostkeys.tmp >> ~/.ssh/known_hosts`) and delete `hostkeys.tmp`. For a non-default port the entry is keyed `[<SSH_HOST>]:<SSH_PORT>`, which `ssh-keyscan -p` produces. If you ever need first-contact trust for a throwaway test, set `SSH_STRICT_HOST_KEY_CHECKING=accept-new` for that run only; never leave it set for LIVE.
 
 ## 1. Subdomain and docroot (staging)
 
@@ -34,13 +57,7 @@ The panel's PHP selector is unavailable, so the handler is chosen per docroot in
 </IfModule>
 ```
 
-Verify (no `phpinfo` page is ever created):
-
-```sh
-ssh <USER>@<HOST> 'cd <STAGING_ROOT> && wp eval "echo PHP_VERSION;"'   # after step 5; must print 8.3.x
-```
-
-If the server's CLI `php` is older, set `REMOTE_PATH_PREFIX` in `.env.deploy` to the directory holding the PHP 8.3 CLI (on cPanel hosts typically `/opt/cpanel/ea-php83/root/usr/bin`), so `composer` and `wp` use it.
+Verification happens after step 6 (the web handler) and with the CLI now: `<PHP83_BIN> -v` must print 8.3.x. No `phpinfo` page is ever created.
 
 ## 3. Database
 
@@ -52,42 +69,71 @@ If the server's CLI `php` is older, set `REMOTE_PATH_PREFIX` in `.env.deploy` to
 
 ```sh
 cd <STAGING_ROOT>
-wp core download --locale=en_US          # latest stable
+$WP core download --locale=en_US          # latest stable
 ```
 
 ## 5. wp-config.php (one level above the docroot)
 
+Create the file without the database secret ever appearing in shell history or the process list for longer than the command itself. Disable history, read the secret silently, use it once, unset it:
+
 ```sh
 cd <STAGING_ROOT>
-wp config create --dbname=<DB_NAME> --dbuser=<DB_USER> --prompt=dbpass \
-    --dbprefix=mfb_ --skip-check --extra-php <<'PHP'
-define('DISALLOW_FILE_EDIT', true);
-define('DISALLOW_FILE_MODS', true);
-define('WP_AUTO_UPDATE_CORE', 'minor');
-define('WP_DEBUG', false);
-define('FORCE_SSL_ADMIN', true);
-PHP
+set +o history                            # bash: nothing below is recorded
+read -rs DB_PASS                          # paste the secret from the ledger; nothing is echoed
+echo
+$WP config create --dbname=<DB_NAME> --dbuser=<DB_USER> --dbpass="$DB_PASS" \
+    --dbprefix=mfb_ --skip-check
+unset DB_PASS
+set -o history
+```
+
+(Alternative without the secret in argv: write it to a mode-600 file, run `$WP config create ... --prompt=dbpass < secretfile`, then `shred -u secretfile`.)
+
+`wp config create` generates fresh salts. Then set every define with its own command (none of these read stdin; string values are quoted inside the raw value):
+
+```sh
+$WP config set DISALLOW_FILE_EDIT     true      --raw --type=constant
+$WP config set DISALLOW_FILE_MODS     true      --raw --type=constant
+$WP config set WP_AUTO_UPDATE_CORE    "'minor'" --raw --type=constant
+$WP config set WP_DEBUG               false     --raw --type=constant
+$WP config set FORCE_SSL_ADMIN        true      --raw --type=constant
 mv wp-config.php ../wp-config.php         # WordPress finds it one directory above the docroot
 ```
 
-`wp config create` generates fresh salts. Check afterwards: `wp config get table_prefix` prints `mfb_`; `wp config get DISALLOW_FILE_MODS` prints `1`. Because `DISALLOW_FILE_MODS` is on, the Two Factor plugin and core updates are installed by deploy/CLI only, never from wp-admin.
+Verify **every** define, the table prefix, and the database connection:
+
+```sh
+for c in DISALLOW_FILE_EDIT DISALLOW_FILE_MODS WP_AUTO_UPDATE_CORE WP_DEBUG FORCE_SSL_ADMIN; do
+  printf '%s=' "$c"; $WP config get "$c" --type=constant; echo
+done
+# expected: DISALLOW_FILE_EDIT=1  DISALLOW_FILE_MODS=1  WP_AUTO_UPDATE_CORE=minor  WP_DEBUG=(empty = false)  FORCE_SSL_ADMIN=1
+$WP config get table_prefix               # mfb_
+$WP db check                              # must report the database tables OK: proves the connection and the grants
+```
+
+Because `DISALLOW_FILE_MODS` is on, the Two Factor plugin and core updates are installed by deploy/CLI only, never from wp-admin.
 
 ## 6. Install and base settings
 
 ```sh
-wp core install --url=https://<STAGING_HOST> --title="Moneyfrog Insights" \
-    --admin_user=<ADMIN_LOGIN> --admin_email=<OWNER_EMAIL> --prompt=admin_password --skip-email
-wp option update timezone_string Asia/Kolkata
-wp rewrite structure '/%postname%/' --hard
-wp option update default_comment_status closed
-wp option update default_ping_status closed
+$WP core install --url=https://<STAGING_HOST> --title="Moneyfrog Insights" \
+    --admin_user=<ADMIN_LOGIN> --admin_email=<OWNER_EMAIL> --skip-email --prompt=admin_password
 ```
 
-Use a strong generated secret for the administrator and store it in the ledger. `<ADMIN_LOGIN>` must not be `admin` (the audit fails otherwise).
+`--prompt=admin_password` reads the generated secret from the terminal (nothing else may use stdin in this command). Store it in the ledger. `<ADMIN_LOGIN>` must not be `admin` (the audit fails otherwise). Then:
+
+```sh
+$WP option update timezone_string Asia/Kolkata
+$WP rewrite structure '/%postname%/' --hard
+$WP option update default_comment_status closed
+$WP option update default_ping_status closed
+$WP eval 'echo PHP_VERSION;'              # must print 8.3.x (the CLI)
+curl -sI https://<STAGING_HOST>/wp-login.php | head -1   # the web handler answers (a PHP error page means the .htaccess handler is wrong)
+```
 
 ## 7. Staging gate: hidden from search, behind basic auth
 
-1. `wp option update blog_public 0` (adds `noindex`).
+1. `$WP option update blog_public 0` (adds `noindex`).
 2. Create the credentials file **outside** the docroot: `htpasswd -c <ACCOUNT_HOME>/.htpasswd-blog-staging <STAGING_USER>` (secret into the ledger).
 3. Append to `<STAGING_ROOT>/.htaccess`:
 
@@ -100,7 +146,7 @@ Require valid-user
 
 4. Issue the TLS certificate with the panel's AutoSSL for `<STAGING_HOST>` and confirm `https://<STAGING_HOST>/` answers 401 without credentials.
 
-Smoke and inventory runs supply the credentials through `SMOKE_AUTH=<STAGING_USER>:<secret>` (environment only; never printed, never committed).
+Smoke and inventory runs supply the credentials through `SMOKE_AUTH=<STAGING_USER>:<secret>` (environment only). The scripts hand it to curl on stdin (never in the argument list, so not visible in `ps`), send it only to the staging host and never to another host a redirect points at, and never print it. Set it with history disabled (`set +o history; read -rs SMOKE_AUTH; export SMOKE_AUTH`) rather than typing it on a command line.
 
 ## 8. First deploy
 
@@ -108,28 +154,28 @@ From the repo, on the pushed commit:
 
 ```sh
 infra/deploy.sh --dry-run staging <sha>      # read the plan
-infra/deploy.sh staging <sha>                # prints: DEPLOYED <sha> staging
+infra/deploy.sh staging <sha>                # prints DEPLOYED <sha> staging only when the server confirms it
 ```
 
-This ships `wp-content/mu-plugins`, `wp-content/themes/moneyfrog` and `composer install --no-dev` (which installs the Two Factor plugin), syncs only those three directories, writes `wp-content/.mf-release`, and flushes cache and rewrites. Then on the server:
+The script checks that the target is a WordPress install first, takes a server-side lock (a second concurrent deploy fails fast), ships `wp-content/mu-plugins`, `wp-content/themes/moneyfrog` and `composer install --no-dev` (which installs the Two Factor plugin), syntax-checks every PHP file, prints the rsync plan including every file it will delete, applies only those three directories, verifies them, flushes cache and rewrites, and only then writes `wp-content/.mf-release`. If any step fails after the sync started, the three directories are re-synced from the previous release, `.mf-release` stays unchanged and the script exits non-zero ("rolled back to <old sha>"). Then on the server:
 
 ```sh
-wp theme activate moneyfrog
-wp plugin activate two-factor
-wp eval 'echo PHP_VERSION;'                  # 8.3.x
-wp core version                              # latest
+$WP theme activate moneyfrog
+$WP plugin activate two-factor
+$WP eval 'echo PHP_VERSION;'                 # 8.3.x
+$WP core version                             # latest
 ```
 
-Verify the release independently: `curl -sI -u "$SMOKE_AUTH" https://<STAGING_HOST>/ | grep -i x-mf-release` shows the first 12 characters of `<sha>`.
+Verify the release independently: `curl -sI https://<STAGING_HOST>/ | grep -i x-mf-release` (with the basic-auth credentials) shows the first 12 characters of `<sha>`; the smoke run checks this when `EXPECT_SHA` is set.
 
 ## 9. Editor accounts and two-factor
 
-1. For each editor the owner names: `wp user create <login> <email> --role=editor --send-email` (or `--user_pass` from a generated secret).
+1. For each editor the owner names: `$WP user create <login> <email> --role=editor --send-email` (or `--user_pass` from a generated secret).
 2. Each editor signs in once and sets up Two Factor under Profile before publishing anything.
 3. Run the audit; it must exit 0 before the site is considered ready:
 
 ```sh
-wp mf audit
+$WP mf audit
 ```
 
 It prints JSON (`php`, `wp`, `timezone`, `two_factor_missing`, `file_edit_disabled`, `file_mods_disabled`, `admin_user_exists`, `xmlrpc_off`, `comments_open_count`, `blog_public`) and fails when any editor lacks Two Factor (the import service user `mf-import` is exempt, its login is blocked), either `DISALLOW_FILE_*` is not true, a user called `admin` exists, any post has comments open, or the timezone is not `Asia/Kolkata`. `blog_public` is reported only (0 on staging, 1 on LIVE).
@@ -138,17 +184,17 @@ It prints JSON (`php`, `wp`, `timezone`, `two_factor_missing`, `file_edit_disabl
 
 ```sh
 # from the repo root; host, user and paths come from your private notes
-rsync -a migration/output/media/ <USER>@<HOST>:<ACCOUNT_HOME>/mf-import/media/
-scp migration/output/bundle.json <USER>@<HOST>:<ACCOUNT_HOME>/mf-import/bundle.json
+rsync -a migration/output/media/ <USER>@<SSH_HOST>:<ACCOUNT_HOME>/mf-import/media/
+scp migration/output/bundle.json <USER>@<SSH_HOST>:<ACCOUNT_HOME>/mf-import/bundle.json
 ```
 
-The import copies the images into the uploads folder (keeping their original upload paths); the staging area is outside the docroot. Then on the server:
+The import copies the images into the uploads folder (keeping their original upload paths); the staging area is outside the docroot. Then on the server (from `<STAGING_ROOT>`):
 
 ```sh
-wp mf import <ACCOUNT_HOME>/mf-import/bundle.json --media-dir=<ACCOUNT_HOME>/mf-import/media --dry-run   # review the report
-wp mf import <ACCOUNT_HOME>/mf-import/bundle.json --media-dir=<ACCOUNT_HOME>/mf-import/media
-wp mf import <ACCOUNT_HOME>/mf-import/bundle.json --media-dir=<ACCOUNT_HOME>/mf-import/media             # second run: created=0
-wp mf warm                                                                                              # caches each post's card image
+$WP mf import <ACCOUNT_HOME>/mf-import/bundle.json --media-dir=<ACCOUNT_HOME>/mf-import/media --dry-run   # review the report
+$WP mf import <ACCOUNT_HOME>/mf-import/bundle.json --media-dir=<ACCOUNT_HOME>/mf-import/media
+$WP mf import <ACCOUNT_HOME>/mf-import/bundle.json --media-dir=<ACCOUNT_HOME>/mf-import/media             # second run: created=0
+$WP mf warm                                                                                              # caches each post's card image
 ```
 
 The bundle and media are never committed. Delete `<ACCOUNT_HOME>/mf-import/` from the server when the import is accepted.
@@ -156,7 +202,7 @@ The bundle and media are never committed. Delete `<ACCOUNT_HOME>/mf-import/` fro
 ## 11. Smoke and inventory
 
 ```sh
-export SMOKE_AUTH='<STAGING_USER>:<secret>'          # staging only
+export SMOKE_AUTH=...                                # staging only; set without echo, see step 7
 export SMOKE_SAMPLE_POST=/<a-published-post-slug>/   # enables the single-post checks
 export SMOKE_BOM_PATH='/<old-slug>%ef%bb%bf/'        # optional; must 301 to SMOKE_SAMPLE_POST
 export EXPECT_SHA=<40-hex deployed sha>              # checks X-MF-Release
@@ -164,24 +210,24 @@ tests/smoke/smoke.sh https://<STAGING_HOST>
 tests/smoke/inventory.sh https://<STAGING_HOST> migration/output/inventory.txt
 ```
 
-Checks that need WP-CLI (PHP version, `file_edit_disabled`, `two_factor_enforced`, import checks) show `SKIP` remotely; their remote equivalents are `wp mf audit` and the `wp eval` calls above. Expected: no `FAIL`, inventory every URL 200 or one 301 then 200.
+Checks that need WP-CLI (PHP version, `file_edit_disabled`, `two_factor_enforced`, import checks) show `SKIP` remotely; their remote equivalents are `$WP mf audit` and the `$WP eval` calls above. The summary prints `SKIPPED <n>`. A remote run without both `EXPECT_SHA` and `SMOKE_SAMPLE_POST` prints a WARNING and exits non-zero unless `SMOKE_ALLOW_SKIPS=1`. Expected: no `FAIL`, inventory every URL 200 or one 301 then 200.
 
 ## 12. Rollback
 
-Each deploy keeps the previous releases under `<STAGING_ROOT>/../releases/` (newest 5 per target, named `<target>-<sha12>-<timestamp>`). To go back:
+Each deploy keeps the previous releases under `<STAGING_ROOT>/../releases/` (newest 5 per target, named `<target>-<sha12>-<timestamp>`). A failed deploy rolls itself back to the previous release. To go back deliberately:
 
-1. Re-deploy the previous pushed commit: `infra/deploy.sh staging <previous-sha>` (preferred, it updates `.mf-release` and flushes caches), or
-2. By hand on the server: `rsync -a --delete <releases>/<name>/wp-content/mu-plugins/ <ROOT>/wp-content/mu-plugins/` (and likewise `themes/moneyfrog/` and `plugins/two-factor/`), write the old full SHA into `<ROOT>/wp-content/.mf-release`, then `wp cache flush && wp rewrite flush`.
+1. Re-deploy the previous pushed commit: `infra/deploy.sh staging <previous-sha>` (preferred, it updates `.mf-release`, verifies and flushes caches), or
+2. By hand on the server: `rsync -a --delete <releases>/<name>/wp-content/mu-plugins/ <ROOT>/wp-content/mu-plugins/` (and likewise `themes/moneyfrog/` and `plugins/two-factor/`), write the old full SHA into `<ROOT>/wp-content/.mf-release`, then `$WP cache flush && $WP rewrite flush`.
 
-Content rolls back separately: take `wp db export` before every import into a private location, and re-import it if needed. Uploads are never removed by a deploy.
+Content rolls back separately: take `$WP db export` before every import into a private location, and re-import it if needed. Uploads are never removed by a deploy.
 
 ## LIVE
 
 Repeat sections 1 to 6 and 8 to 10 for `<LIVE_HOST>`/`<LIVE_ROOT>` with these differences:
 
-- No basic auth, no `.htpasswd`; `wp option update blog_public 1`.
-- Deploy with `infra/deploy.sh live <sha>`; the sha must be on `origin/main`, ideally the exact commit already verified on staging.
-- Smoke and inventory run **without** `SMOKE_AUTH`, with `EXPECT_SHA` set.
-- Before the switch take `wp db export` and keep the old blog untouched and reachable for rollback.
+- No basic auth, no `.htpasswd`; `$WP option update blog_public 1`.
+- Deploy with `infra/deploy.sh live <sha>`; the script refuses any sha that is not on `origin/main` (no feature-branch exceptions), ideally the exact commit already verified on staging.
+- Smoke and inventory run **without** `SMOKE_AUTH`, with `EXPECT_SHA` and `SMOKE_SAMPLE_POST` set.
+- Before the switch take `$WP db export` and keep the old blog untouched and reachable for rollback.
 - **Owner step, Cloudflare:** the Cloudflare record for `<LIVE_HOST>` is pointed at the new origin (or the origin override changed) only after staging has passed. Rollback is pointing it back at the previous origin. Cloudflare is changed by the owner, not by scripts.
-- After the switch re-run the smoke and inventory suites against the public URL, confirm `X-MF-Release` matches the deployed sha, and run `wp mf audit` again (`blog_public` reported as 1).
+- After the switch re-run the smoke and inventory suites against the public URL, confirm `X-MF-Release` matches the deployed sha, and run `$WP mf audit` again (`blog_public` reported as 1).
