@@ -216,6 +216,12 @@ category_page() {
   [ "$(http_status "/category/mutual-funds/?order=asc&tag=sip")" = 200 ] || return 1
   curl -s --max-time 20 "$BASE/category/mutual-funds/?order=asc" | grep -q 'class="pagination"'
 }
+login_branded() {
+  local h; h="$(curl -s --max-time 20 "$BASE/wp-login.php")"
+  grep -q 'assets/css/login.css' <<<"$h" && grep -q 'moneyfrog-logo.svg' <<<"$h" || return 1
+  grep -q '<title>[^<]*Moneyfrog Insights' <<<"$h" || return 1
+  ! grep -qi 'href="https://wordpress.org' <<<"$h" && ! grep -qi 'Powered by WordPress' <<<"$h" && grep -q 'href="https://moneyfrog.in"' <<<"$h"
+}
 category_tag_pills_use_names() {
   local topic h pills n href slug seen=0
   for topic in market-outlook mutual-funds tax insurance retirement financial-planning guides; do
@@ -466,6 +472,7 @@ check_local home_sections      home_sections
 check_local cover_for_no_image cover_for_no_image
 check_local category_page      category_page
 check_local search_works       search_works
+check_local login_branded      login_branded
 check       category_tag_pills_use_names category_tag_pills_use_names
 check       newsletter_hidden  newsletter_hidden
 check       advisor_cta        advisor_cta

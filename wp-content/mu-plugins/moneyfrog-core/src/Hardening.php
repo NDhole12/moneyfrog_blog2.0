@@ -37,6 +37,19 @@ final class Hardening
         add_filter('authenticate', [self::class, 'rejectIfRateLimited'], 99);
         add_action('wp_login_failed', [self::class, 'recordFailure']);
         add_action('wp_login', [self::class, 'clearFailures'], 10, 0);
+        add_filter('login_errors', [self::class, 'genericLoginError']);
+    }
+
+    public const GENERIC_LOGIN_ERROR = "Those details didn't work. Please try again.";
+
+    /** Login errors never say whether the username exists; only the rate-limit notice is passed through. */
+    public static function genericLoginError(mixed $error): string
+    {
+        $text = is_string($error) ? $error : '';
+        if ($text === '') {
+            return '';
+        }
+        return str_contains($text, 'Too many failed login attempts') ? $text : self::GENERIC_LOGIN_ERROR;
     }
 
     /**

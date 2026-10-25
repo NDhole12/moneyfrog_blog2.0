@@ -11,6 +11,7 @@ require_once get_template_directory() . '/inc/tag-label.php';
 require_once get_template_directory() . '/inc/queries.php';
 require_once get_template_directory() . '/inc/single.php';
 require_once get_template_directory() . '/inc/seo.php';
+require_once get_template_directory() . '/inc/login.php';
 
 add_action('after_setup_theme', static function (): void {
     add_theme_support('title-tag');
