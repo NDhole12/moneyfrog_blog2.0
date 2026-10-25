@@ -8,6 +8,8 @@ namespace MoneyfrogCore;
  */
 final class Redirects
 {
+    private const ALLOWED_HOSTS = ['moneyfrog.in', 'blog.moneyfrog.in'];
+
     public static function normalisePath(string $uri): string
     {
         $path = explode('#', explode('?', $uri, 2)[0], 2)[0];
@@ -31,5 +33,41 @@ final class Redirects
             return $target;
         }
         return $target . (str_contains($target, '?') ? '&' : '?') . $query;
+    }
+
+    /** Only GET and HEAD requests are redirected. */
+    public static function isRedirectableMethod(string $method): bool
+    {
+        return in_array(strtoupper($method), ['GET', 'HEAD'], true);
+    }
+
+    /**
+     * Decide whether a lookup target may be used. Returns the URL to redirect
+     * to, or null when it must be ignored (loop, foreign host, host tricks).
+     */
+    public static function decide(string $target, string $ownHost, string $currentPath): ?string
+    {
+        if ($target === '' || str_starts_with($target, '//') || str_contains($target, '\\')
+            || preg_match('/[\x00-\x20\x7f]/', $target) === 1) {
+            return null;
+        }
+        $parts = parse_url($target);
+        if ($parts === false || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $own = strtolower($ownHost);
+        if ($host === '') {
+            if (!str_starts_with($target, '/') || isset($parts['scheme'])) {
+                return null;
+            }
+        } elseif (!in_array($parts['scheme'] ?? '', ['http', 'https'], true)
+            || ($host !== $own && !in_array($host, self::ALLOWED_HOSTS, true))) {
+            return null;
+        }
+        if (($host === '' || $host === $own) && self::normalisePath((string) ($parts['path'] ?? '/')) === $currentPath) {
+            return null;
+        }
+        return $target;
     }
 }

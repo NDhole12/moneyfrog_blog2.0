@@ -12,9 +12,15 @@ final class Content
 
     public static function readingTime(string $html, int $wpm = 200): int
     {
-        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $words = preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        return max(1, (int) ceil(count($words) / max(1, $wpm)));
+        return max(1, (int) ceil(self::wordCount($html) / max(1, $wpm)));
+    }
+
+    /** Visible words: script/style dropped, tags act as word boundaries. */
+    public static function wordCount(string $html): int
+    {
+        $html = (string) preg_replace('#<(script|style)\b[^>]*>.*?</\1\s*>#is', ' ', $html);
+        $text = html_entity_decode(strip_tags((string) preg_replace('/<[^>]*>/', ' ', $html)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return count(preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY) ?: []);
     }
 
     /** Give every <h2> a stable, unique id (existing ids are kept). */
@@ -42,7 +48,7 @@ final class Content
     public static function coverPhrase(string $title, string $topicName): string
     {
         $title = trim($title);
-        $parts = preg_split('/[–-]|[:?]/u', $title, 2) ?: [$title];
+        $parts = preg_split('/\s-\s|[–—:?]/u', $title, 2) ?: [$title];
         $head = trim($parts[0]);
         if ($head !== '' && mb_strlen($head) <= self::COVER_MAX) {
             return $head;

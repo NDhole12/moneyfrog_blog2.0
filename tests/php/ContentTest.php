@@ -60,4 +60,20 @@ final class ContentTest extends TestCase
         $this->assertSame('Retirement', Content::coverPhrase('Supercalifragilisticexpialidocious extraordinarily unbelievable', 'Retirement'));
         $this->assertLessThanOrEqual(22, mb_strlen(Content::coverPhrase($title, 'Retirement')));
     }
+
+    public function test_word_count_treats_tags_as_boundaries_and_skips_script_style(): void
+    {
+        $this->assertSame(2, Content::wordCount('<p>one</p><p>two</p>'));
+        $this->assertSame(3, Content::wordCount('<p>a b</p><script>var x = 1; foo();</script><style>p { color: red }</style><p>c</p>'));
+        $this->assertSame(3, Content::readingTime('<p>' . str_repeat('word ', 600) . '</p>'));
+    }
+
+    public function test_cover_phrase_hyphens_and_dashes(): void
+    {
+        $this->assertSame('Mid-cap funds', Content::coverPhrase('Mid-cap funds: what to know', 'Mutual Funds'));
+        $this->assertSame('Mutual Funds', Content::coverPhrase('Long-term investing for beginners', 'Mutual Funds'));
+        $this->assertSame('Long-term investing', Content::coverPhrase('Long-term investing', 'Mutual Funds'));
+        $this->assertSame('Market Outlook', Content::coverPhrase('Market Outlook — June 2025', 'Market Outlook'));
+        $this->assertSame('SIP basics', Content::coverPhrase('SIP basics - a primer', 'Mutual Funds'));
+    }
 }
