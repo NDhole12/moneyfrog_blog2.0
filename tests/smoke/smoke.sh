@@ -116,7 +116,21 @@ trackback_closed() {
   post_is_blocked /wp-trackback.php && post_is_blocked "${path}trackback/"
 }
 users_sitemap_gone() {
-  [ "$(http_status /wp-sitemap-users-1.xml)" = 404 ] && ! curl -s --max-time 20 "$BASE/wp-sitemap.xml" | grep -q 'users'
+  # The users sitemap must be 404. Core disables sitemaps entirely when blog_public=0 (index 404,
+  # correct on staging); otherwise the index must be 200 and list no users provider.
+  local idx
+  [ "$(http_status /wp-sitemap-users-1.xml)" = 404 ] || return 1
+  idx="$(http_status /wp-sitemap.xml)"
+  [ "$idx" = 404 ] && return 0
+  [ "$idx" = 200 ] || return 1
+  ! curl -s --max-time 20 "$BASE/wp-sitemap.xml" | grep -qi 'wp-sitemap-users'
+}
+no_powered_by_header() {
+  local p
+  for p in / /wp-login.php /wp-json/; do
+    curl -s -D - -o /dev/null --max-time 20 "$BASE$p" | tr -d '\r' | grep -qi '^HTTP/' || return 1
+    ! curl -s -D - -o /dev/null --max-time 20 "$BASE$p" | tr -d '\r' | grep -qi '^X-Powered-By:'
+  done
 }
 rest_embed_no_author() {
   local id body
@@ -175,12 +189,6 @@ no_google_fonts() { local h; h="$(home_html)"; [ -n "$h" ] && ! grep -qE 'fonts\
 nav_links_to_site() {
   local h; h="$(home_html)"
   grep -q 'href="https://moneyfrog.in/login"' <<<"$h" && grep -q 'href="https://moneyfrog.in/signup"' <<<"$h"
-}
-footer_registration() {
-  # Two lines, exactly as on moneyfrog.in (tags stripped; the "|" separators are aria-hidden spans).
-  local t; t="$(home_html | tr '
-' ' ' | sed 's#<[^>]*>##g' | tr -s ' ')"
-  grep -qF 'Moneyfrog Financial Services Private Limited | CIN: U66000MH2011PTC216613 | GSTIN: 27AAJCA5151G1ZR AMFI Registered Mutual Fund Distributor: ARN 94798 | IRDAI Registered Corporate Agent: CA0450' <<<"$t"
 }
 # Visible text of the blog's <header>/<footer> must equal the reference markup saved from the live site.
 LIVE_REF=tests/fixtures/live
@@ -483,6 +491,7 @@ check_sample no_comment_form        no_comment_form
 check_sample pingback_header_absent pingback_header_absent
 check_sample trackback_closed       trackback_closed
 check       users_sitemap_gone     users_sitemap_gone
+check       no_powered_by_header   no_powered_by_header
 check_local rest_embed_no_author   rest_embed_no_author
 check_local file_edit_disabled     file_edit_disabled
 check_local two_factor_enforced     two_factor_enforced
@@ -498,8 +507,7 @@ check       theme_active          theme_active
 check       gtm_present           gtm_present
 check       no_google_fonts       no_google_fonts
 check       nav_links_to_site     nav_links_to_site
-check       footer_registration   footer_registration
-check_local header_footer_match_live header_footer_match_live
+check       header_footer_match_live header_footer_match_live   # HTTP-only: also runs against staging/LIVE
 check       404_themed            not_found_themed
 
 check_local home_sections      home_sections
