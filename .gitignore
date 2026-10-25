@@ -1,0 +1,28 @@
+# Secrets — never commit
+docs/private/
+.env
+.env.*
+!.env.example
+wp-config.php
+secrets.php
+**/secrets.php
+*.pem
+*.key
+
+# Database dumps and migration output (may hold personal data)
+*.sql
+*.sql.gz
+migration/output/
+migration/cache/
+
+# WordPress runtime (lives on the server, not in git)
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+
+# Tooling
+node_modules/
+vendor/
+*.log
+.DS_Store
+Thumbs.db
