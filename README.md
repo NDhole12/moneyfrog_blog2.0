@@ -28,6 +28,14 @@ docker compose run --rm wpcli wp option update timezone_string Asia/Kolkata   # 
 Tests: `composer test` (PHPUnit), `npm test` in `migration/` (vitest),
 `tests/smoke/smoke.sh http://localhost:8080` (live checks).
 
+### Deploying
+
+`infra/provision.md` is the staging/LIVE runbook. `infra/deploy.sh [--dry-run] <staging|live> <sha>`
+deploys a pushed commit (server details only in the git-ignored `infra/.env.deploy`; copy
+`infra/.env.deploy.example`). `wp mf audit` checks the hardening requirements on any environment and
+`wp mf warm` pre-computes card images. Against a remote site `tests/smoke/smoke.sh` honours
+`SMOKE_AUTH`, `SMOKE_SAMPLE_POST`, `SMOKE_BOM_PATH` and `EXPECT_SHA` (see the header of the script).
+
 ### Importing the old blog
 
 ```bash

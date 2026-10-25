@@ -3,6 +3,8 @@ docs/private/
 .env
 .env.*
 !.env.example
+!.env.deploy.example
+infra/.env.deploy
 wp-config.php
 secrets.php
 **/secrets.php
