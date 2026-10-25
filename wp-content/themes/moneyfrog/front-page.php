@@ -18,41 +18,50 @@ get_header();
     <h1 class="sr-only">Moneyfrog Insights</h1>
     <section class="home-top">
         <div class="wrap">
-            <div class="home-top__grid">
-                <?php if ($featured) : ?>
-                    <?php get_template_part('template-parts/card', null, ['post' => $featured, 'layout' => 'featured']); ?>
-                <?php endif; ?>
-                <?php if ($s['picks']) : ?>
-                <div class="picks">
-                    <h2 class="side-heading">Editor&rsquo;s picks</h2>
-                    <ol class="picks__list">
-                        <?php foreach ($s['picks'] as $i => $p) : ?>
-                            <?php
-                            $topic   = mf_post_topic($p);
-                            $tname   = $topic ? $topic->name : 'Insights';
-                            $imageId = mf_card_image_id($p->ID);
-                            ?>
-                            <li class="picks__item">
-                                <span class="picks__n"><?php echo esc_html(sprintf('%02d', $i + 1)); ?></span>
-                                <div class="picks__thumb<?php echo $imageId > 0 ? '' : ' picks__thumb--cover picks__thumb--' . ($p->ID % 2 === 0 ? 'cream' : 'night'); ?>" aria-hidden="true">
-                                    <?php if ($imageId > 0) : ?>
-                                        <?php echo wp_get_attachment_image($imageId, 'thumbnail', false, ['loading' => 'lazy', 'decoding' => 'async', 'alt' => '']); // phpcs:ignore WordPress.Security.EscapeOutput -- core-generated <img>. ?>
-                                    <?php else : ?>
-                                        <span><?php echo esc_html(mb_strtoupper(mb_substr($tname, 0, 1))); ?></span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="picks__text">
-                                    <p class="card__eyebrow"><?php echo esc_html($tname); ?></p>
-                                    <h3 class="picks__title"><a class="card__link" href="<?php echo esc_url(get_permalink($p)); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
-                                </div>
-                            </li>
-                        <?php endforeach; ?>
-                    </ol>
-                </div>
-                <?php endif; ?>
-            </div>
+            <?php if ($featured) : ?>
+                <?php get_template_part('template-parts/card', null, ['post' => $featured, 'layout' => 'featured']); ?>
+            <?php endif; ?>
         </div>
     </section>
+
+    <?php if ($s['picks']) : ?>
+    <section class="editors-picks" aria-labelledby="editors-picks-title">
+        <div class="wrap">
+            <div class="picks-head">
+                <div class="picks-head__title">
+                    <h2 class="picks-head__h" id="editors-picks-title">Editor&rsquo;s Picks</h2>
+                    <span class="picks-head__bar" aria-hidden="true"></span>
+                </div>
+                <span class="picks-head__rule" aria-hidden="true"></span>
+                <a class="picks-head__all" href="<?php echo esc_url(home_url('/#latest')); ?>" aria-label="All articles"><?php echo mf_icon('i-arrow'); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside mf_icon(). ?></a>
+            </div>
+            <ol class="picks__list">
+                <?php foreach ($s['picks'] as $i => $p) : ?>
+                    <?php
+                    $topic   = mf_post_topic($p);
+                    $tname   = $topic ? $topic->name : 'Insights';
+                    $imageId = mf_card_image_id($p->ID);
+                    ?>
+                    <li class="picks__item">
+                        <span class="picks__n" aria-hidden="true"><?php echo esc_html(sprintf('%02d', $i + 1)); ?></span>
+                        <div class="picks__thumb" aria-hidden="true">
+                            <?php if ($imageId > 0) : ?>
+                                <?php echo wp_get_attachment_image($imageId, 'mf-card', false, ['loading' => 'lazy', 'decoding' => 'async', 'alt' => '']); // phpcs:ignore WordPress.Security.EscapeOutput -- core-generated <img>. ?>
+                            <?php else : ?>
+                                <?php get_template_part('template-parts/cover', null, ['title' => get_the_title($p), 'topic' => $tname, 'variant' => $p->ID % 2 === 0 ? 'cream' : 'night']); ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="picks__text">
+                            <p class="card__eyebrow picks__topic"><?php echo esc_html($tname); ?></p>
+                            <h3 class="picks__title"><a class="picks__link" href="<?php echo esc_url(get_permalink($p)); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
+                        </div>
+                        <span class="picks__arrow" aria-hidden="true"><?php echo mf_icon('i-arrow'); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside mf_icon(). ?></span>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+        </div>
+    </section>
+    <?php endif; ?>
 
     <section class="home-topics">
         <div class="wrap">
