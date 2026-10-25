@@ -4,6 +4,7 @@ docs/private/
 .env.*
 !.env.example
 !.env.deploy.example
+!.env.backup.example
 infra/.env.deploy
 wp-config.php
 secrets.php
@@ -32,3 +33,4 @@ Thumbs.db
 # Composer-managed plugins and PHP deps (installed, not committed)
 wp-content/plugins/
 .phpunit.result.cache
+__pycache__/

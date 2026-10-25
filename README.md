@@ -36,6 +36,14 @@ deploys a pushed commit (server details only in the git-ignored `infra/.env.depl
 `wp mf warm` pre-computes card images. Against a remote site `tests/smoke/smoke.sh` honours
 `SMOKE_AUTH`, `SMOKE_SAMPLE_POST`, `SMOKE_BOM_PATH` and `EXPECT_SHA` (see the header of the script).
 
+### Backups and restore
+
+`infra/backup.sh [--dry-run] [--weekly] <staging|live>` runs on the server from cron (DB daily, uploads
+weekly) and uploads to S3 with `infra/s3put.py` (Python 3 standard library, AWS Signature V4, write-only
+IAM user). Config: git-ignored `infra/.env.backup` (copy `infra/.env.backup.example`). Bucket/IAM setup,
+retention (S3 lifecycle), the cron line and the restore drill are in `infra/restore.md`.
+Uploader tests need no npm or pip: `python3 -m unittest infra/test_s3put.py`.
+
 ### Importing the old blog
 
 ```bash
