@@ -7,6 +7,21 @@
 
 defined('ABSPATH') || exit;
 
+// Do not advertise the PHP version (front end, REST, wp-admin and wp-login all load mu-plugins).
+// Belt and braces with `expose_php = Off` in the docroot .user.ini (see infra/provision.md).
+if (!headers_sent()) {
+    header_remove('X-Powered-By');
+}
+add_action('send_headers', static function (): void {
+    if (!headers_sent()) {
+        header_remove('X-Powered-By');
+    }
+}, PHP_INT_MAX);
+add_filter('wp_headers', static function (array $headers): array {
+    unset($headers['X-Powered-By']);
+    return $headers;
+}, PHP_INT_MAX);
+
 $moneyfrog_core_dir = __DIR__ . '/moneyfrog-core';
 
 foreach (glob($moneyfrog_core_dir . '/src/*.php') ?: [] as $moneyfrog_core_file) {
