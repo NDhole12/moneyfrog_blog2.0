@@ -187,7 +187,7 @@ human signs off before import. Old category URLs 301 to the new topic (`/categor
 - **PHP rule:** PHP 8.3 is set **per docroot only**. The CRM's PHP version must not change.
   If GoDaddy can't give PHP 8.2+ to the new docroot without touching the CRM, stop and come
   back to the owner. No workaround on an old PHP.
-- **Staging first** on a staging hostname (for example `blog-new.monefrog.tech`, behind basic
+- **Staging first** on a staging hostname (a subdomain of the hosting account's domain, see `docs/private/`, behind basic
   auth, `noindex`). Full migration rehearsed and checked there. Only then switch
   `blog.moneyfrog.in` to the new docroot.
 - Cut-over: point the `blog.moneyfrog.in` addon domain (and Cloudflare origin) at the new
@@ -232,7 +232,7 @@ image sizes, search implementation (core search is fine), "Load more" vs paginat
 - **Sign-offs:** Saurabh (or whoever he names, e.g. Sahil) approves the topic-mapping CSV and
   the sanitising report before import.
 - Self-hosted fonts instead of Google Fonts.
-- Staging hostname under `monefrog.tech`.
+- Staging hostname: a subdomain of the hosting account's domain (named in `docs/private/`).
 - Mockups: the builder is this same team, with access to the canvas.
 
 ## 14. Open dependency (needed before cut-over, not before building)
