@@ -43,6 +43,7 @@
   --ink: #16191d;
   --ink-2: #4c525a;
   --gold-ink: #8a6a1f;
+  --muted: #838a93;          /* footer copyright only, as on moneyfrog.in */
   --gold-ink-strong: #7a5c17; /* 4.89:1 on --topbar; for small text on the top bar */
   --gold: #c29a2c;
   --gold-soft: #e3c66a;
@@ -78,5 +79,17 @@
   --card-pad: 14px;
   --grid-gap: 16px;
   --radius-card: 10px;
+  --fs-ui: 13px;            /* pills, chips, sort, breadcrumb, small controls */
+  --fs-btn: 13.5px;
+  --fs-micro: 11.5px;
+  --fs-invest: 20px;        /* dark invest card lead */
+  --fs-post-h2: 22px;
+  --fs-quote: 19px;
+  --fs-quote-sm: 18px;
+  --line-3: #e2dbcd;        /* pill, search and pagination borders */
+  --line-gold: #c9b98f;
+  --field: #faf9f5;
+  --ink-on-dark: #c9cdd2;
+  --ink-on-dark-2: #aeb3ba;
 }
 @media (max-width: 600px) { :root { --gap-section: 28px; } }

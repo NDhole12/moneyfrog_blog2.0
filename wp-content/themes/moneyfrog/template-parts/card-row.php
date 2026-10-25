@@ -1,5 +1,5 @@
 <?php
-/** Horizontal list row (category and search). Args: ['post' => WP_Post]. */
+/** Horizontal list row (category, search, author). Args: ['post' => WP_Post, 'topic' => ?string label override]. The eyebrow is always a topic name, never a tag. */
 
 if (!defined('ABSPATH')) {
     exit;
@@ -22,7 +22,7 @@ $c = mf_card_data($post);
         ?>
     </div>
     <div class="card-row__body">
-        <p class="card__eyebrow"><?php echo esc_html(mf_row_label($post, $c['topic'])); ?></p>
+        <p class="card__eyebrow"><?php echo esc_html((string) ($args['topic'] ?? $c['topic'])); ?></p>
         <h3 class="card__title"><a class="card__link" href="<?php echo esc_url($c['url']); ?>"><?php echo esc_html($c['title']); ?></a></h3>
         <?php if ($c['excerpt'] !== '') : ?>
             <p class="card__excerpt"><?php echo esc_html($c['excerpt']); ?></p>

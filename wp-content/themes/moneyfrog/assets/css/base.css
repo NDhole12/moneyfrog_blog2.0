@@ -26,7 +26,7 @@ body.is-locked { overflow: hidden; }
 main { font-size: var(--fs-body); line-height: 1.6; }
 main time, main .card__meta, .popular__n, .picks__n, .start-here__n, .topic-tile__count, .pagination { font-variant-numeric: tabular-nums; }
 /* Buttons inside the blog layer are compact; header and footer buttons are untouched. */
-main .btn { height: 40px; padding: 0 var(--sp-4); font-size: 13.5px; }
+main .btn { height: 40px; padding: 0 var(--sp-4); font-size: var(--fs-btn); }
 
 .eyebrow { display: block; font: 500 var(--fs-eyebrow)/1.4 var(--mono); letter-spacing: .24em; text-transform: uppercase; color: var(--gold-ink); margin-bottom: var(--sp-2); }
 .display, .h2, .h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); letter-spacing: -.015em; }

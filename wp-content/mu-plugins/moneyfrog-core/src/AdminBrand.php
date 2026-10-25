@@ -22,13 +22,15 @@ final class AdminBrand
         add_action('admin_bar_menu', [self::class, 'removeWpLogo'], 999);
         // Registered immediately: core resolves the scheme's stylesheet the first time it builds the style list.
         self::registerColorScheme();
-        add_filter('get_user_option_admin_color', [self::class, 'defaultScheme']);
+        add_action('user_register', [self::class, 'setSchemeForNewUser']);
+        add_action('init', [self::class, 'migrateExistingUsers'], 20);
         add_filter('admin_footer_text', [self::class, 'footerText']);
         add_filter('update_footer', [self::class, 'versionText'], 11);
         add_filter('update_right_now_text', '__return_empty_string');
         add_action('admin_init', [self::class, 'removeWelcomePanel']);
         add_action('wp_dashboard_setup', [self::class, 'tidyDashboard'], 20);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueBarStyle']);
+        add_action('admin_enqueue_scripts', [self::class, 'enqueueSchemeStyle']);
         add_action('wp_enqueue_scripts', [self::class, 'enqueueBarStyle']);
         add_action('admin_head', [self::class, 'printFavicon']);
         add_action('login_head', [self::class, 'printFavicon']);
@@ -79,19 +81,36 @@ final class AdminBrand
         wp_admin_css_color(
             self::SCHEME,
             'Moneyfrog',
-            self::assetUrl('admin-colors.css') . '?ver=' . self::assetVersion('admin-colors.css'),
+            admin_url('css/colors/modern/colors' . (defined('SCRIPT_DEBUG') && SCRIPT_DEBUG ? '' : '.min') . '.css'),
             ['#16191d', '#8a6a1f', '#c29a2c', '#f9f8f4'],
             ['base' => '#e3c66a', 'focus' => '#ffffff', 'current' => '#ffffff']
         );
     }
 
-    /**
-     * Everyone gets the Moneyfrog scheme unless they explicitly saved another one. Core stores its own
-     * default on every new user ("fresh", "modern" on current versions), so those count as "never chose".
-     */
-    public static function defaultScheme(mixed $value): mixed
+    public const MIGRATION_OPTION = 'mf_admin_color_migrated';
+
+    /** New users start on the Moneyfrog scheme; they can pick another one in their profile. */
+    public static function setSchemeForNewUser(int $userId): void
     {
-        return ($value === false || $value === null || $value === '' || $value === 'fresh' || $value === 'modern') ? self::SCHEME : $value;
+        update_user_meta($userId, 'admin_color', self::SCHEME);
+    }
+
+    /**
+     * One-time move of existing users who never chose a scheme (stored value empty, or core's own
+     * default: "fresh", and "modern" on current WordPress). Anyone with another stored value keeps it.
+     */
+    public static function migrateExistingUsers(): void
+    {
+        if (get_option(self::MIGRATION_OPTION) === '1') {
+            return;
+        }
+        foreach (get_users(['fields' => 'ID', 'number' => -1]) as $id) {
+            $current = (string) get_user_meta((int) $id, 'admin_color', true);
+            if (in_array($current, ['', 'fresh', 'modern'], true)) {
+                update_user_meta((int) $id, 'admin_color', self::SCHEME);
+            }
+        }
+        update_option(self::MIGRATION_OPTION, '1', false);
     }
 
     public static function footerText(mixed $text = ''): string
@@ -135,6 +154,14 @@ final class AdminBrand
         echo '<p class="description">Every post shows the compliance disclaimer automatically.</p>';
     }
 
+    /** Overrides for the Moneyfrog scheme, loaded after core's `colors` stylesheet. */
+    public static function enqueueSchemeStyle(): void
+    {
+        if (get_user_option('admin_color') === self::SCHEME) {
+            wp_enqueue_style('mf-admin-colors', self::assetUrl('admin-colors.css'), ['colors'], self::assetVersion('admin-colors.css'));
+        }
+    }
+
     public static function enqueueBarStyle(): void
     {
         if (!is_admin() && !is_admin_bar_showing()) {
@@ -145,17 +172,14 @@ final class AdminBrand
 
     public static function siteIconUrl(): string
     {
-        return self::assetUrl('favicon.png');
+        return self::assetUrl('favicon-32.png');
     }
 
     public static function printFavicon(): void
     {
-        $png = esc_url(self::assetUrl('favicon.png'));
-        printf('<link rel="icon" type="image/svg+xml" href="%s">' . "
-", esc_url(self::assetUrl('favicon-frog.svg')));
-        printf('<link rel="icon" type="image/png" sizes="48x48" href="%s">' . "
-", $png);
-        printf('<link rel="apple-touch-icon" sizes="48x48" href="%s">' . "
-", $png);
+        $eol = chr(10);
+        printf('<link rel="icon" type="image/svg+xml" href="%s">%s', esc_url(self::assetUrl('favicon-frog.svg')), $eol);
+        printf('<link rel="icon" type="image/png" sizes="32x32" href="%s">%s', esc_url(self::assetUrl('favicon-32.png')), $eol);
+        printf('<link rel="apple-touch-icon" sizes="180x180" href="%s">%s', esc_url(self::assetUrl('favicon.png')), $eol);
     }
 }

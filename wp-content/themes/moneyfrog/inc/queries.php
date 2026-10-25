@@ -110,20 +110,6 @@ function mf_card_data(WP_Post $post, string $size = 'mf-card'): array
     ];
 }
 
-/** First non-utility tag name on a post (list-row eyebrow), else the topic name. */
-function mf_row_label(WP_Post $post, string $topicName): string
-{
-    $tags = get_the_tags($post->ID);
-    if (is_array($tags)) {
-        foreach ($tags as $tag) {
-            if (!in_array($tag->slug, MF_UTILITY_TAGS, true)) {
-                return mf_tag_label($tag->name, $tag->slug);
-            }
-        }
-    }
-    return $topicName;
-}
-
 /**
  * Home page data. featured = newest Market Outlook; picks = editors-pick tag (fallback
  * newest non-outlook); outlook = next four outlooks; latest = paged query excluding those;

@@ -28,6 +28,21 @@ $link = static function (string $tagSlug) use ($base, $order): string {
     return esc_url(add_query_arg($args, $base));
 };
 
+/** Sort control; rendered once next to the pills, or (when there are no pills) in the eyebrow row on desktop and under the intro on phones. */
+$sortForm = static function (string $id, string $class) use ($base, $tag, $order): void {
+    ?>
+    <form class="<?php echo esc_attr($class); ?>" method="get" action="<?php echo esc_url($base); ?>" data-autosubmit>
+        <?php if ($tag !== '') : ?><input type="hidden" name="tag" value="<?php echo esc_attr($tag); ?>"><?php endif; ?>
+        <label for="<?php echo esc_attr($id); ?>">Sort</label>
+        <select id="<?php echo esc_attr($id); ?>" name="order">
+            <option value="desc"<?php selected($order, 'desc'); ?>>Newest first</option>
+            <option value="asc"<?php selected($order, 'asc'); ?>>Oldest first</option>
+        </select>
+        <noscript><button type="submit" class="btn btn--outline btn--sm">Apply</button></noscript>
+    </form>
+    <?php
+};
+
 get_header();
 ?>
 <main id="main">
@@ -38,9 +53,12 @@ get_header();
                 <span aria-hidden="true">/</span>
                 <span aria-current="page"><?php echo esc_html($topic->name); ?></span>
             </nav>
+            <div class="cat-meta">
+                <span class="eyebrow"><?php echo esc_html(sprintf('Topic · %d %s', $count, $count === 1 ? 'article' : 'articles')); ?></span>
+                <?php if (!$subs) : $sortForm('sort-meta', 'sort sort--meta'); endif; ?>
+            </div>
             <div class="cat-head__main">
                 <div class="cat-head__copy">
-                    <span class="eyebrow"><?php echo esc_html(sprintf('Topic · %d %s', $count, $count === 1 ? 'article' : 'articles')); ?></span>
                     <h1 class="display"><?php echo esc_html($topic->name); ?></h1>
                     <p class="lead"><?php echo esc_html(mf_topic_blurb($topic)); ?></p>
                 </div>
@@ -48,7 +66,7 @@ get_header();
                     <a class="btn btn--gold btn--sm cat-head__cta" href="<?php echo esc_url($site); ?>">Explore <?php echo esc_html($topic->name); ?> <?php echo mf_icon('i-arrow'); ?></a>
                 <?php endif; ?>
             </div>
-            <div class="cat-tools">
+            <div class="cat-tools<?php echo $subs ? '' : ' cat-tools--solo'; ?>">
                 <?php if ($subs) : ?>
                 <nav class="chips" aria-label="Sub-topics">
                     <a class="chip<?php echo $tag === '' ? ' is-current' : ''; ?>" href="<?php echo $link(''); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in $link. ?>"<?php echo $tag === '' ? ' aria-current="page"' : ''; ?>>All</a>
@@ -57,15 +75,7 @@ get_header();
                     <?php endforeach; ?>
                 </nav>
                 <?php endif; ?>
-                <form class="sort" method="get" action="<?php echo esc_url($base); ?>" data-autosubmit>
-                    <?php if ($tag !== '') : ?><input type="hidden" name="tag" value="<?php echo esc_attr($tag); ?>"><?php endif; ?>
-                    <label for="sort">Sort</label>
-                    <select id="sort" name="order">
-                        <option value="desc"<?php selected($order, 'desc'); ?>>Newest first</option>
-                        <option value="asc"<?php selected($order, 'asc'); ?>>Oldest first</option>
-                    </select>
-                    <noscript><button type="submit" class="btn btn--outline btn--sm">Apply</button></noscript>
-                </form>
+                <?php $sortForm('sort-tools', 'sort sort--tools'); ?>
             </div>
         </div>
     </section>
@@ -101,7 +111,7 @@ get_header();
             <?php if (have_posts()) : ?>
                 <div class="rows">
                     <?php foreach ($wp_query->posts as $p) : ?>
-                        <?php get_template_part('template-parts/card-row', null, ['post' => $p]); ?>
+                        <?php get_template_part('template-parts/card-row', null, ['post' => $p, 'topic' => $topic->name]); ?>
                     <?php endforeach; ?>
                 </div>
                 <?php get_template_part('template-parts/pagination', null, ['total' => (int) $wp_query->max_num_pages, 'current' => $paged]); ?>

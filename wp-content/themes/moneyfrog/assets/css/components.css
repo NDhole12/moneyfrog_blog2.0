@@ -94,7 +94,7 @@
 .footer__office { margin-top: 8px; }
 .footer__disclaimer { max-width: 1040px; margin: 8px auto 0; }
 .footer__disclaimer a { color: var(--gold-ink); text-decoration: underline; text-underline-offset: 3px; }
-.footer__copy { margin-top: 0; }
+.footer__copy { margin-top: 0; color: var(--muted); }
 
 /* ---------- Disclaimer (posts) and 404 ---------- */
 .disclaimer { margin-top: 40px; padding: 16px 20px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--card); font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }

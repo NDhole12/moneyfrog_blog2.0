@@ -1,7 +1,5 @@
-@import url("/wp-admin/css/colors/modern/colors.css");
-
 /* Moneyfrog admin colour scheme: ink menu, gold-ink highlight, gold notifications, cream surfaces.
-   Layered over the core "modern" scheme so every control still has its base styling. */
+   Loaded after core's "modern" colours (the `colors` stylesheet this file depends on) so every control still has its base styling. */
 :root, body {
   --wp-admin-theme-color: #8a6a1f;
   --wp-admin-theme-color--rgb: 138, 106, 31;

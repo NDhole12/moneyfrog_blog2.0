@@ -219,19 +219,29 @@ category_page() {
 admin_branded() {
   wp eval '
     require_once ABSPATH . WPINC . "/class-wp-admin-bar.php";
+    require_once ABSPATH . "wp-admin/includes/user.php";
     $bar = new WP_Admin_Bar();
     do_action_ref_array("admin_bar_menu", [&$bar]);
     $ok = $bar->get_node("wp-logo") === null && $bar->get_node("mf-home") !== null;
     $ok = $ok && str_contains(apply_filters("admin_footer_text", ""), "Moneyfrog Insights");
-    $ok = $ok && apply_filters("get_user_option_admin_color", false, "admin_color", null) === "moneyfrog";
-    $ok = $ok && apply_filters("get_user_option_admin_color", "midnight", "admin_color", null) === "midnight" && apply_filters("get_user_option_admin_color", "modern", "admin_color", null) === "moneyfrog";
+    $ok = $ok && !has_filter("get_user_option_admin_color");
+    $mk = static fn (string $n): int => (int) wp_insert_user(["user_login" => "codespark-qa-scheme-" . $n, "user_pass" => wp_generate_password(24), "user_email" => "qa-scheme-" . $n . "@example.invalid"]);
+    $new = $mk("new"); $chosen = $mk("chosen"); $core = $mk("core");
+    $ok = $ok && get_user_meta($new, "admin_color", true) === "moneyfrog";
+    update_user_meta($chosen, "admin_color", "midnight");
+    update_user_meta($core, "admin_color", "fresh");
+    delete_option(\MoneyfrogCore\AdminBrand::MIGRATION_OPTION);
+    \MoneyfrogCore\AdminBrand::migrateExistingUsers();
+    $ok = $ok && get_user_meta($chosen, "admin_color", true) === "midnight" && get_user_meta($core, "admin_color", true) === "moneyfrog";
+    foreach ([$new, $chosen, $core] as $id) { wp_delete_user($id); }
     echo $ok ? "ADMIN_BRANDED_OK" : "ADMIN_BRANDED_FAIL";' </dev/null 2>/dev/null | grep -q ADMIN_BRANDED_OK
 }
 favicon_is_moneyfrog() {
   local h; h="$(home_html)"
   grep -q '<link rel="icon" type="image/svg+xml" href="[^"]*favicon-frog.svg' <<<"$h" || return 1
-  grep -q '<link rel="icon" type="image/png"[^>]*favicon.png' <<<"$h" || return 1
-  grep -q '<link rel="apple-touch-icon"[^>]*favicon.png' <<<"$h" || return 1
+  grep -q '<link rel="icon" type="image/png" sizes="32x32"[^>]*favicon-32.png' <<<"$h" || return 1
+  grep -q '<link rel="apple-touch-icon" sizes="180x180"[^>]*/favicon.png' <<<"$h" || return 1
+  ! is_local || [ "$(file -b wp-content/mu-plugins/moneyfrog-core/assets/favicon.png | cut -c1-9)" = "PNG image" ] || return 1
   ! grep -q 'wp-includes/images/w-logo' <<<"$h" && [ "$(grep -o 'rel="icon"' <<<"$h" | wc -l | tr -d ' ')" = 2 ]
 }
 login_branded() {
@@ -239,6 +249,12 @@ login_branded() {
   grep -q 'assets/css/login.css' <<<"$h" && grep -q 'moneyfrog-logo.svg' <<<"$h" || return 1
   grep -q '<title>[^<]*Moneyfrog Insights' <<<"$h" || return 1
   ! grep -qi 'href="https://wordpress.org' <<<"$h" && ! grep -qi 'Powered by WordPress' <<<"$h" && grep -q 'href="https://moneyfrog.in"' <<<"$h"
+}
+row_eyebrows_are_topics() {
+  local h names
+  h="$(curl -s --max-time 20 "$BASE/category/mutual-funds/" | tr '\n' ' ')"
+  names="$(grep -o '<article class="card-row">.\{0,900\}' <<<"$h" | grep -o 'card__eyebrow">[^<]*' | sed 's/card__eyebrow">//' | sort -u)"
+  [ "$names" = "Mutual Funds" ]
 }
 category_tag_pills_use_names() {
   local topic h pills n href slug seen=0
@@ -491,6 +507,7 @@ check_local cover_for_no_image cover_for_no_image
 check_local category_page      category_page
 check_local search_works       search_works
 check_local login_branded      login_branded
+check       row_eyebrows_are_topics row_eyebrows_are_topics
 check       favicon_is_moneyfrog favicon_is_moneyfrog
 check_local admin_branded      admin_branded
 check       category_tag_pills_use_names category_tag_pills_use_names
