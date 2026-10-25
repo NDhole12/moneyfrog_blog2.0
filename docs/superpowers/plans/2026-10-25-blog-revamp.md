@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- PUBLIC repo: never commit IPs, cPanel user, DB names/passwords, server paths, `.env`, `wp-config.php`, SQL dumps, or migration output. Those go in `docs/private/` or `~/.claude/credentials/`.
-- Never use the words "Claude" or "Anthropic" anywhere (code, comments, commits, test data). Test data uses `Codespark QA`.
+- PUBLIC repo: never commit IPs, cPanel user, DB names/passwords, server paths, `.env`, `wp-config.php`, SQL dumps, or migration output. Those go in `docs/private/` or the account-level credentials ledger (outside every repo).
+- Branding: only "Codespark" appears as the tool/agency name in code, comments, commits and test data. Test data uses `Codespark QA`.
 - Commits: conventional (`feat:`, `fix:`, `test:`, `chore:`, `docs:`), no attribution trailer. Push after each task; deploy only a pushed SHA.
 - Old blog is **never touched**: read only via `https://blog.moneyfrog.in/wp-json/wp/v2/*` and public URLs. No writes, no logins, no file access on the old install or the old GoDaddy copy.
 - PHP ≥ 8.2 (target 8.3) on every environment; the CRM's PHP version on the shared account must not change.
