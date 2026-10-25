@@ -27,16 +27,19 @@ export function cleanSlug(slug) {
 
 export const slugify = (s) => cleanSlug(String(s).normalize('NFKD').replace(/[̀-ͯ]/g, ''));
 
-const byDate = (a, b) => String(a.date).localeCompare(String(b.date)) || a.oldId - b.oldId;
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+/** R32: posts always beat school pages for a bare slug; within a type, oldest first. */
+const byPriority = (a, b) => cmp(a.type === 'post' ? 0 : 1, b.type === 'post' ? 0 : 1)
+  || cmp(String(a.date), String(b.date)) || a.oldId - b.oldId;
 
 const baseSlug = (it) => cleanSlug(it.slug) || `item-${it.oldId}`;
 
-/** Oldest item keeps the bare slug; later collisions get -2, -3... */
+/** Posts keep the bare slug over pages, then oldest wins; later collisions get -2, -3... */
 export function assignSlugs(items) {
   const used = new Set();
   const chosen = new Map();
   const groups = new Map();
-  for (const it of [...items].sort(byDate)) {
+  for (const it of [...items].sort(byPriority)) {
     const base = baseSlug(it);
     groups.set(base, [...(groups.get(base) ?? []), it]);
   }
@@ -57,8 +60,11 @@ export function assignSlugs(items) {
     const extra = it.type === 'page' ? `/moneyfrog-school/${cleaned}/` : `/${cleaned}/`;
     if (cleaned && !oldPaths.includes(extra)) oldPaths.push(extra);
     // A path that is another item's live URL must not redirect away from it.
-    const kept = oldPaths.filter((p) => { const n = normalisePath(p); return n === own || !live.has(n); });
-    return { oldId: it.oldId, type: it.type, newSlug: chosen.get(it), oldPaths: kept };
+    const claims = (p) => { const n = normalisePath(p); return n === own || !live.has(n); };
+    return {
+      oldId: it.oldId, type: it.type, newSlug: chosen.get(it), wantedSlug: baseSlug(it),
+      oldPaths: oldPaths.filter(claims), droppedPaths: oldPaths.filter((p) => !claims(p)),
+    };
   });
 }
 

@@ -76,8 +76,8 @@ describe('bundle', () => {
     expect(mo.excerpt).toBe('One two three four five six seven eight nine ten.');
     expect(mo.featuredMediaOldId).toBeNull();
     const page = bundle.items.find((i) => i.oldId === 90);
-    expect(page).toMatchObject({ oldType: 'page', topic: 'guides', newSlug: 'gilt-fund' });
-    expect(bundle.items.find((i) => i.oldId === 3).newSlug).toBe('gilt-fund-2');
+    expect(page).toMatchObject({ oldType: 'page', topic: 'guides', newSlug: 'gilt-fund-2' });
+    expect(bundle.items.find((i) => i.oldId === 3).newSlug).toBe('gilt-fund');
     expect(bundle.items.some((i) => i.oldId === 91)).toBe(false);
   });
 
@@ -129,6 +129,45 @@ describe('bundle', () => {
     for (const v of Object.values(redirects).filter((t) => !t.startsWith('/'))) {
       expect(v).toBe('https://moneyfrog.in/contact-us');
     }
+  });
+
+  it('author archives of users with no items redirect home; every inventory URL is covered', () => {
+    const { redirects, inventory } = buildBundle(raw());
+    expect(redirects['/author/nobody/']).toBe('/');
+    expect(redirects['/moneyfrog-school/gilt-fund/']).toBe('/gilt-fund-2/');
+    expect(inventory).toContain(`${H}/author/nobody/`);
+  });
+
+  it('build throws listing any uncovered old URL', () => {
+    const r = raw();
+    r.media.push({ id: 502, source_url: `${H}/files/brochure.pdf`, alt_text: '', media_type: 'file' });
+    expect(() => buildBundle(r)).toThrow(/uncovered[\s\S]*\/files\/brochure\.pdf/);
+  });
+
+  it('report lists slug decisions at the top with winner, loser and resolutions', () => {
+    const { reportData } = buildBundle(raw());
+    expect(reportData.slugDecisions).toHaveLength(1);
+    const html = renderReport(reportData);
+    expect(html.indexOf('Slug decisions')).toBeGreaterThan(-1);
+    expect(html.indexOf('Slug decisions')).toBeLessThan(html.indexOf('Removed, by kind'));
+    expect(html).toContain('/gilt-fund-2/');
+    expect(html).toMatch(/\/moneyfrog-school\/gilt-fund\/<\/code> now resolves to <code>\/gilt-fund-2\//);
+    expect(html).toMatch(/Winner: post 3[\s\S]*Loser: page 90/);
+  });
+
+  it('report escapes hostile markup in flag excerpts and removed details', () => {
+    const html = renderReport({
+      total: 1, removedCounts: {}, flagCounts: {}, topicCounts: {}, slugDecisions: [],
+      entries: [{
+        oldId: 1, title: 'T', oldUrl: 'u',
+        removed: [{ kind: 'script', detail: '<script>alert(1)</script>' }],
+        flags: [{ kind: 'keyword', excerpt: '<img src=x onerror=alert(1)>' }],
+      }],
+    });
+    expect(html).toContain('&lt;img');
+    expect(html).toContain('&lt;script');
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('<script>');
   });
 
   it('report counts removals and flags and escapes excerpts', () => {

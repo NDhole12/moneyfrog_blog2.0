@@ -28,6 +28,20 @@ const STYLE = 'body{font:15px/1.5 system-ui,sans-serif;max-width:60rem;margin:2r
   + '.n{text-align:right}section{border-top:1px solid #ddd6c7;padding:.75rem 0}code{background:#f3efe5;padding:0 .25rem}'
   + 'li{margin:.25rem 0}.k{font-weight:600}';
 
+function renderDecisions(list) {
+  if (!list.length) return '<h2>Slug decisions</h2><p>No slug collisions.</p>';
+  const one = (d) => {
+    const rows = d.resolutions.map((r) => `<li><code>${esc(r.path)}</code> now resolves to <code>${esc(r.to)}</code></li>`).join('');
+    const dropped = d.droppedPaths.length
+      ? `<p>Claims dropped so the winner keeps its URL: ${d.droppedPaths.map((p) => `<code>${esc(p)}</code>`).join(', ')}</p>` : '';
+    return `<section><h3><code>/${esc(d.slug)}/</code></h3>`
+      + `<p>Winner: ${esc(d.winner.type)} ${d.winner.oldId} &ldquo;${esc(d.winner.title)}&rdquo; keeps <code>/${esc(d.winner.newSlug)}/</code></p>`
+      + `<p>Loser: ${esc(d.loser.type)} ${d.loser.oldId} &ldquo;${esc(d.loser.title)}&rdquo; moves to <code>/${esc(d.loser.newSlug)}/</code></p>`
+      + `${dropped}<ul>${rows}</ul></section>`;
+  };
+  return `<h2>Slug decisions (${list.length})</h2>\n${list.map(one).join('\n')}`;
+}
+
 /** reportData: { total, removedCounts, flagCounts, topicCounts, entries: [{ oldId, title, oldUrl, removed, flags }] } */
 export function renderReport(d) {
   const sections = d.entries.map((e) => {
@@ -42,6 +56,7 @@ export function renderReport(d) {
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
     `<title>Migration report</title><style>${STYLE}</style></head><body>`,
     `<h1>Migration report</h1><p>${d.total} items migrated, ${d.entries.length} with removals or flags.</p>`,
+    renderDecisions(d.slugDecisions ?? []),
     `<h2>Removed, by kind</h2><table>${countRows(d.removedCounts)}</table>`,
     `<h2>Flags, by kind</h2><table>${countRows(d.flagCounts)}</table>`,
     `<h2>Items per topic</h2><table>${countRows(d.topicCounts)}</table>`,

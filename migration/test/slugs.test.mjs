@@ -66,17 +66,28 @@ describe('slugs', () => {
     });
   });
 
-  it('collision loser never claims the winner live path (page older than post)', () => {
+  it('R32: a post keeps the bare slug even when an older page wants it', () => {
     const assigned = assignSlugs([
       { oldId: 1, type: 'page', slug: 'gilt-fund', oldPath: '/moneyfrog-school/gilt-fund/', date: '2019-01-01' },
       { oldId: 2, type: 'post', slug: 'gilt-fund', oldPath: '/gilt-fund/', date: '2020-01-01' },
     ]);
     const post = assigned.find((a) => a.oldId === 2);
-    expect(post.newSlug).toBe('gilt-fund-2');
-    expect(post.oldPaths.map(normalisePath)).not.toContain('/gilt-fund/');
+    const page = assigned.find((a) => a.oldId === 1);
+    expect(post.newSlug).toBe('gilt-fund');
+    expect(page.newSlug).toBe('gilt-fund-2');
+    expect(page.oldPaths).toEqual(['/moneyfrog-school/gilt-fund/']);
+    expect(page.droppedPaths).toEqual([]);
     const map = buildRedirects(assigned, {}, {});
+    expect(map['/moneyfrog-school/gilt-fund/']).toBe('/gilt-fund-2/');
     expect(map['/gilt-fund/']).toBeUndefined();
-    expect(map['/moneyfrog-school/gilt-fund/']).toBe('/gilt-fund/');
+  });
+
+  it('within one type the oldest item still wins', () => {
+    const assigned = assignSlugs([
+      { oldId: 5, type: 'post', slug: 'y', oldPath: '/y/', date: '2022-01-01' },
+      { oldId: 4, type: 'post', slug: 'y', oldPath: '/y/', date: '2021-01-01' },
+    ]);
+    expect(Object.fromEntries(assigned.map((a) => [a.oldId, a.newSlug]))).toEqual({ 4: 'y', 5: 'y-2' });
   });
 
   it('collision loser never claims the winner live path (post vs post, BOM twin)', () => {

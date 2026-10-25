@@ -4,7 +4,7 @@ import path from 'node:path';
 import * as cheerio from 'cheerio';
 import { sanitize } from './sanitize.mjs';
 import { buildPlan } from './review.mjs';
-import { slugify, cleanSlug, isSchoolPage } from './slugs.mjs';
+import { slugify, cleanSlug, isSchoolPage, normalisePath } from './slugs.mjs';
 import { renderRedirectsPhp, renderInventory, renderReport } from './render.mjs';
 
 export { renderRedirectsPhp, renderInventory, renderReport };
@@ -13,6 +13,7 @@ const OLD_ORIGIN = 'https://blog.moneyfrog.in';
 const UPLOADS = '/wp-content/uploads/';
 const EXCERPT_MAX = 300;
 const FALLBACK_WORDS = 40;
+const TOPICS = ['market-outlook', 'mutual-funds', 'tax', 'insurance', 'retirement', 'financial-planning', 'guides'];
 
 const plain = (html) => cheerio.load(String(html ?? ''), null, false).text().replace(/\s+/g, ' ').trim();
 const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
@@ -57,7 +58,39 @@ function buildBylines(users, items) {
     const slug = slugify(name);
     if (used.has(slug)) bySlug.set(slug, { slug, name, bio: plain(u.description), role: '' });
   }
-  return [...bySlug.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+  return [...bySlug.values()].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
+}
+
+/** Throws unless every old public URL still lands somewhere on the new site. */
+function assertCoverage(inventory, { items, bylineSlugs, redirects, media }) {
+  const covered = new Set([
+    ...items.map((i) => `/${i.newSlug}/`),
+    ...TOPICS.map((t) => `/category/${t}/`),
+    ...[...bylineSlugs].map((b) => `/author/${b}/`),
+    ...media.filter((m) => m.uploadPath).map((m) => normalisePath(`${UPLOADS}${m.uploadPath}`)),
+    ...Object.keys(redirects),
+  ]);
+  const missing = inventory.filter((u) => !covered.has(normalisePath(new URL(u).pathname)));
+  if (missing.length) throw new Error(`${missing.length} old URL(s) uncovered:\n${missing.join('\n')}`);
+}
+
+/** One record per slug collision: who won, who lost, and where each old URL now resolves. */
+function buildSlugDecisions(assigned, items, redirects) {
+  const byId = new Map(items.map((i) => [`${i.oldType}:${i.oldId}`, i]));
+  const live = new Set(items.map((i) => `/${i.newSlug}/`));
+  const resolve = (p) => {
+    const k = normalisePath(p);
+    return redirects[k] ?? (live.has(k) ? k : '(not resolved)');
+  };
+  const info = (a) => ({ oldId: a.oldId, type: a.type, title: byId.get(`${a.type}:${a.oldId}`).title, newSlug: a.newSlug });
+  return assigned.filter((a) => a.newSlug !== a.wantedSlug).map((loser) => {
+    const winner = assigned.find((a) => a.newSlug === loser.wantedSlug);
+    const paths = [...new Set([...winner.oldPaths, ...loser.oldPaths, ...loser.droppedPaths])];
+    return {
+      slug: loser.wantedSlug, winner: info(winner), loser: info(loser),
+      droppedPaths: loser.droppedPaths, resolutions: paths.map((p) => ({ path: p, to: resolve(p) })),
+    };
+  }).sort((x, y) => (x.slug < y.slug ? -1 : x.slug > y.slug ? 1 : x.loser.oldId - y.loser.oldId));
 }
 
 /** Pure: raw WordPress REST data in, bundle + generated file contents out. */
@@ -110,9 +143,15 @@ export function buildBundle({ posts, pages, media, categories, tags, users }) {
   }
 
   const mediaOut = buildMedia(media, warnings);
+  const bylines = buildBylines(users, items);
+  const bylineSlugs = new Set(bylines.map((b) => b.slug));
+  // Authors with no migrated items have no archive on the new site: send them home.
+  for (const u of users) {
+    if (!bylineSlugs.has(slugify(plain(u.name)))) redirects[normalisePath(`/author/${u.slug}/`)] = '/';
+  }
   const bundle = {
     generatedAt: items.map((i) => i.modified).sort().at(-1) ?? '',
-    source: OLD_ORIGIN, items, bylines: buildBylines(users, items), media: mediaOut,
+    source: OLD_ORIGIN, items, bylines, media: mediaOut,
   };
 
   const inventory = [...new Set([
@@ -123,8 +162,11 @@ export function buildBundle({ posts, pages, media, categories, tags, users }) {
     ...media.map((m) => oldUrl(m.source_url)),
   ])].sort();
 
+  assertCoverage(inventory, { items, bylineSlugs, redirects, media: mediaOut });
+
   entries.sort((x, y) => x.oldId - y.oldId);
-  const reportData = { total: items.length, removedCounts, flagCounts, topicCounts, entries };
+  const slugDecisions = buildSlugDecisions(plan.assigned, items, redirects);
+  const reportData = { total: items.length, removedCounts, flagCounts, topicCounts, slugDecisions, entries };
   return { bundle, redirects, inventory, reportData, warnings };
 }
 
