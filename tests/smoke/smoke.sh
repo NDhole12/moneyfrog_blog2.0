@@ -141,7 +141,35 @@ not_found_themed() {
   [ "$(http_status /codespark-qa-missing/)" = 404 ] && curl -s --max-time 20 "$BASE/codespark-qa-missing/" | grep -q 'class="blog-bar"'
 }
 
+seed_fixtures() { bash tests/fixtures/seed.sh "$BASE" >/dev/null 2>&1; }
+home_sections() {
+  local h; h="$(home_html)"
+  grep -q 'Codespark QA – Market Outlook: October 2026' <<<"$h" || return 1
+  [ "$(grep -o 'class="card card--compact' <<<"$h" | wc -l | tr -d ' ')" = 4 ] || return 1
+  grep -q 'Browse by topic' <<<"$h" || return 1
+  [ "$(grep -o 'class="topic-tile" href="[^"]*/category/[a-z-]*/"' <<<"$h" | wc -l | tr -d ' ')" = 6 ]
+}
+cover_for_no_image() { home_html | grep -q 'class="mf-cover'; }
+category_page() {
+  local h
+  [ "$(http_status /category/mutual-funds/)" = 200 ] || return 1
+  h="$(curl -s --max-time 20 "$BASE/category/mutual-funds/")"
+  grep -q 'articles' <<<"$h" && grep -q 'class="pagination"' <<<"$h" || return 1
+  [ "$(http_status "/category/mutual-funds/?order=asc&tag=sip")" = 200 ] || return 1
+  curl -s --max-time 20 "$BASE/category/mutual-funds/?order=asc" | grep -q 'class="pagination"'
+}
+search_works() {
+  local h
+  [ "$(http_status '/?s=SIP')" = 200 ] || return 1
+  h="$(curl -s --max-time 20 "$BASE/?s=SIP")"
+  grep -q 'Results for' <<<"$h" && grep -q 'SIP vs' <<<"$h"
+}
+newsletter_hidden() { ! home_html | grep -q 'type="email"'; }
+advisor_cta() { home_html | tr '
+' ' ' | grep -q 'class="advisor-cta".*href="https://moneyfrog.in/contact-us"'; }
+
 # ---- checks ----
+is_local && seed_fixtures
 check       home_200         status_is / 200
 check_local php_8_3          php_version_ok
 check       mu_plugin_loaded header_has /wp-json/ '^X-MF-Core: 1'
@@ -167,6 +195,13 @@ check       no_google_fonts       no_google_fonts
 check       nav_links_to_site     nav_links_to_site
 check       footer_registration   footer_registration
 check       404_themed            not_found_themed
+
+check_local home_sections      home_sections
+check_local cover_for_no_image cover_for_no_image
+check_local category_page      category_page
+check_local search_works       search_works
+check       newsletter_hidden  newsletter_hidden
+check       advisor_cta        advisor_cta
 
 # ---- summary ----
 echo "Summary: $PASSES passed, $FAILS failed, $SKIPS skipped"

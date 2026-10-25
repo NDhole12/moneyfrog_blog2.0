@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) {
 
 require_once get_template_directory() . '/inc/icons.php';
 require_once get_template_directory() . '/inc/gtm.php';
+require_once get_template_directory() . '/inc/queries.php';
 
 add_action('after_setup_theme', static function (): void {
     add_theme_support('title-tag');
@@ -24,6 +25,7 @@ add_action('wp_enqueue_scripts', static function (): void {
     wp_enqueue_style('mf-tokens', $uri . '/assets/css/tokens.css', [], $ver('/assets/css/tokens.css'));
     wp_enqueue_style('mf-base', $uri . '/assets/css/base.css', ['mf-tokens'], $ver('/assets/css/base.css'));
     wp_enqueue_style('mf-components', $uri . '/assets/css/components.css', ['mf-base'], $ver('/assets/css/components.css'));
+    wp_enqueue_style('mf-pages', $uri . '/assets/css/pages.css', ['mf-components'], $ver('/assets/css/pages.css'));
     wp_enqueue_script('mf-nav', $uri . '/assets/js/nav.js', [], $ver('/assets/js/nav.js'), ['in_footer' => true, 'strategy' => 'defer']);
 });
 

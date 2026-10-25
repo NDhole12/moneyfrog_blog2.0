@@ -14,4 +14,10 @@ final class ConfigTest extends TestCase
         $this->assertSame('Market Outlook', Config::TOPICS['market-outlook']);
         $this->assertCount(7, Config::TOPICS);
     }
+
+    public function test_every_topic_has_a_blurb(): void
+    {
+        $this->assertSame(array_keys(Config::TOPICS), array_keys(Config::TOPIC_BLURBS));
+        $this->assertSame('SIPs, debt funds, choosing schemes', Config::TOPIC_BLURBS['mutual-funds']);
+    }
 }

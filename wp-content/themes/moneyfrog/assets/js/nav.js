@@ -105,4 +105,9 @@
       if (m.matches && drawer.classList.contains('is-open')) { setDrawer(false, false); }
     });
   }
+
+  /* ---- Forms that apply on change (category sort); a <noscript> button covers no-JS ---- */
+  Array.prototype.forEach.call(document.querySelectorAll('form[data-autosubmit]'), function (form) {
+    form.addEventListener('change', function () { form.submit(); });
+  });
 })();
