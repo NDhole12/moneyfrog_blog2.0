@@ -126,6 +126,21 @@ byline_rest_no_user_data() {
   grep -q '"slug":"codespark-qa"' <<<"$body" && ! grep -q 'mf_codespark_qa' <<<"$body" && ! grep -q '"author"' <<<"$body"
 }
 
+home_html() { curl -s --max-time 20 "$BASE/"; }
+theme_active() { home_html | grep -q 'themes/moneyfrog/assets/css/tokens.css'; }
+gtm_present() { [ "$(home_html | grep -o 'GTM-M9PS8WZT' | wc -l | tr -d ' ')" = 2 ]; }
+no_google_fonts() { local h; h="$(home_html)"; [ -n "$h" ] && ! grep -qE 'fonts\.(googleapis|gstatic)\.com' <<<"$h"; }
+nav_links_to_site() {
+  local h; h="$(home_html)"
+  grep -q 'href="https://moneyfrog.in/login"' <<<"$h" && grep -q 'href="https://moneyfrog.in/signup"' <<<"$h"
+}
+footer_registration() {
+  home_html | grep -qF 'Moneyfrog Financial Services Private Limited | CIN: U66000MH2011PTC216613 | AMFI Registered Mutual Fund Distributor: ARN 94798 | IRDAI Registered Corporate Agent: CA0450'
+}
+not_found_themed() {
+  [ "$(http_status /codespark-qa-missing/)" = 404 ] && curl -s --max-time 20 "$BASE/codespark-qa-missing/" | grep -q 'class="blog-bar"'
+}
+
 # ---- checks ----
 check       home_200         status_is / 200
 check_local php_8_3          php_version_ok
@@ -146,6 +161,12 @@ check_local redirect_hook_live      redirect_hook_live
 check_local core_author_archive_hidden core_author_archive_hidden
 check_local byline_archive          byline_archive
 check_local byline_rest_no_user_data byline_rest_no_user_data
+check       theme_active          theme_active
+check       gtm_present           gtm_present
+check       no_google_fonts       no_google_fonts
+check       nav_links_to_site     nav_links_to_site
+check       footer_registration   footer_registration
+check       404_themed            not_found_themed
 
 # ---- summary ----
 echo "Summary: $PASSES passed, $FAILS failed, $SKIPS skipped"
