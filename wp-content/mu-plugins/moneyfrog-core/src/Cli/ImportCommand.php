@@ -33,6 +33,9 @@ final class ImportCommand
      */
     public function __invoke(array $args, array $assoc): void
     {
+        if (!Importer::isIndiaOffset((string) get_option('timezone_string'), get_option('gmt_offset'))) {
+            \WP_CLI::error('Site timezone must be Asia/Kolkata (+5:30), the old blog (IST); run: wp option update timezone_string Asia/Kolkata');
+        }
         $bundlePath = (string) ($args[0] ?? '');
         if ($bundlePath === '' || !is_file($bundlePath)) {
             \WP_CLI::error('Bundle not found: ' . $bundlePath);
@@ -53,11 +56,23 @@ final class ImportCommand
         $report = $runner->run($bundle);
 
         $this->printReport($report['counts'], $dryRun);
-        $logPath = dirname($bundlePath) . '/' . ($dryRun ? 'import-log-dry-run.json' : 'import-log.json');
-        file_put_contents($logPath, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        \WP_CLI::line('log: ' . $logPath);
-
+        $json = (string) json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $failed = array_sum(array_map(static fn (array $c): int => $c['failed'] ?? 0, $report['counts']));
+        $writeFailed = false;
+        if ($dryRun) {
+            \WP_CLI::line($json); // a dry run writes nothing: the would-be log goes to stdout
+        } else {
+            $logPath = dirname($bundlePath) . '/import-log.json';
+            if (file_put_contents($logPath, $json) === false) {
+                $writeFailed = true;
+                \WP_CLI::warning('Could not write the log: ' . $logPath);
+            } else {
+                \WP_CLI::line('log: ' . $logPath);
+            }
+        }
+        if ($writeFailed) {
+            \WP_CLI::error('Import ran but the log could not be written.');
+        }
         if ($failed > 0) {
             \WP_CLI::error(sprintf('%d item(s) failed; see the log.', $failed));
         }

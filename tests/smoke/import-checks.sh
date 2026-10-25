@@ -18,6 +18,7 @@ import_cleanup() {
     foreach (get_posts(["post_type" => "attachment", "post_status" => "any", "numberposts" => -1, "meta_key" => "_mf_old_media_id", "fields" => "ids"]) as $id) {
       if ((int) get_post_meta($id, "_mf_old_media_id", true) >= 990000) { wp_delete_attachment($id, true); }
     }
+    foreach (get_posts(["post_type" => "post", "post_status" => "any", "name" => "codespark-qa-slug-owner", "numberposts" => -1, "fields" => "ids"]) as $id) { wp_delete_post($id, true); }
     $t = get_term_by("slug", "codespark-qa-import", "mf_byline");
     if ($t) { wp_delete_term($t->term_id, "mf_byline"); }
     $t = get_term_by("name", "Codespark QA Tag", "post_tag");
@@ -62,12 +63,29 @@ import_scenario() {
   cp -r tests/fixtures/import/bundle.json tests/fixtures/import/media "$IMPORT_WORK_DIR/"
   import_cleanup
   wp_nopath mf import "$IMPORT_BUNDLE_IN_CONTAINER" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" --dry-run >"$IMPORT_TMP/dry.out" 2>&1; echo $? >"$IMPORT_TMP/dry.code"
+  [ -f "$IMPORT_WORK_DIR/import-log.json" ] || [ -f "$IMPORT_WORK_DIR/import-log-dry-run.json" ] && echo yes >"$IMPORT_TMP/dry.logfile"
   import_state >"$IMPORT_TMP/after-dry.json"
   wp_nopath mf import "$IMPORT_BUNDLE_IN_CONTAINER" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" >"$IMPORT_TMP/run1.out" 2>&1; echo $? >"$IMPORT_TMP/run1.code"
   import_state >"$IMPORT_TMP/after1.json"
   cp "$IMPORT_WORK_DIR/import-log.json" "$IMPORT_TMP/log1.json" 2>/dev/null
   wp_nopath mf import "$IMPORT_BUNDLE_IN_CONTAINER" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" >"$IMPORT_TMP/run2.out" 2>&1; echo $? >"$IMPORT_TMP/run2.code"
   import_state >"$IMPORT_TMP/after2.json"
+  cp tests/fixtures/import/bundle-bad.json "$IMPORT_WORK_DIR/bundle-bad.json"
+  wp_nopath eval 'wp_insert_post(["post_title" => "Codespark QA Slug Owner", "post_name" => "codespark-qa-slug-owner", "post_status" => "publish", "post_content" => "owner"]);' >/dev/null 2>&1
+  local bad="/migration/output/qa-import/bundle-bad.json"
+  wp_nopath mf import "$bad" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" >"$IMPORT_TMP/bad1.out" 2>&1; echo $? >"$IMPORT_TMP/bad1.code"
+  cp "$IMPORT_WORK_DIR/import-log.json" "$IMPORT_TMP/badlog.json" 2>/dev/null
+  wp_nopath mf import "$bad" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" >"$IMPORT_TMP/bad2.out" 2>&1; echo $? >"$IMPORT_TMP/bad2.code"
+  wp_nopath eval '
+    $o = get_posts(["post_type" => "post", "name" => "codespark-qa-slug-owner", "numberposts" => -1]);
+    $n = 0; foreach (get_posts(["post_type" => "post", "post_status" => "any", "numberposts" => -1, "meta_key" => "_mf_old_id", "fields" => "ids"]) as $id) { if ((int) get_post_meta($id, "_mf_old_id", true) >= 900000) { $n++; } }
+    $g = get_posts(["post_type" => "post", "name" => "codespark-qa-good-after-bad", "numberposts" => 1]);
+    echo "
+JSON:" . wp_json_encode(["owners" => count($o), "owner_title" => $o ? $o[0]->post_title : null, "imported" => $n, "good_content" => $g ? $g[0]->post_content : null]);
+  ' 2>/dev/null | tr -d '\r' | sed -n 's/^JSON://p' | tail -n1 >"$IMPORT_TMP/after-bad.json"
+  wp_nopath option update timezone_string UTC >/dev/null 2>&1
+  wp_nopath mf import "$IMPORT_BUNDLE_IN_CONTAINER" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" --dry-run >"$IMPORT_TMP/tz.out" 2>&1; echo $? >"$IMPORT_TMP/tz.code"
+  wp_nopath option update timezone_string Asia/Kolkata >/dev/null 2>&1
   IMPORT_PIXEL_HTTP="$(curl -s -o "$IMPORT_TMP/pixel.png" -w '%{http_code}' --max-time 20 "$BASE/wp-content/uploads/2026/01/codespark-qa-pixel.png")"
   echo "$IMPORT_PIXEL_HTTP" >"$IMPORT_TMP/pixel.code"
   import_cleanup
@@ -78,7 +96,7 @@ import_scenario() {
 jget() { node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const v=process.argv[2].split(".").reduce((o,k)=>o==null?o:o[k],j);console.log(typeof v==="object"?JSON.stringify(v):String(v))' "$1" "$2"; }
 
 import_dry_run_writes_nothing() {
-  [ "$(cat "$IMPORT_TMP/dry.code")" = 0 ] && grep -q 'posts: created=2' "$IMPORT_TMP/dry.out" \
+  [ ! -f "$IMPORT_TMP/dry.logfile" ] && grep -q '"events"' "$IMPORT_TMP/dry.out" && [ "$(jget "$IMPORT_TMP/after-dry.json" file_exists)" = false ]     && [ "$(cat "$IMPORT_TMP/dry.code")" = 0 ] && grep -q 'posts: created=2' "$IMPORT_TMP/dry.out" \
     && [ "$(jget "$IMPORT_TMP/after-dry.json" posts)" = 0 ] && [ "$(jget "$IMPORT_TMP/after-dry.json" attachments)" = 0 ]
 }
 import_first_run_creates() {
@@ -125,4 +143,18 @@ service_user_login_blocked() {
   wp_nopath eval '\MoneyfrogCore\ServiceUser::rotatePassword();' >/dev/null 2>&1
   rm -f "$jar"
   [ "$code" = 0 ] && grep -q 'cannot sign in' <<<"$body"
+}
+
+import_slug_taken_and_per_item_errors() {
+  [ "$(cat "$IMPORT_TMP/bad1.code")" != 0 ] && [ -s "$IMPORT_TMP/badlog.json" ]     && grep -q 'posts: created=1 updated=0 skipped=0 failed=3' "$IMPORT_TMP/bad1.out"     && grep -q 'media: created=0 updated=0 skipped=0 failed=1' "$IMPORT_TMP/bad1.out"     && grep -q '"type": "slug-taken"' "$IMPORT_TMP/badlog.json" && grep -q '"type": "blocked-extension"' "$IMPORT_TMP/badlog.json"     && grep -q 'owned by post' "$IMPORT_TMP/badlog.json"     && ! grep -Eq 'Stack|#0 ' "$IMPORT_TMP/badlog.json"     && [ "$(jget "$IMPORT_TMP/after-bad.json" owners)" = 1 ] && [ "$(jget "$IMPORT_TMP/after-bad.json" owner_title)" = 'Codespark QA Slug Owner' ]     && [ "$(jget "$IMPORT_TMP/after-bad.json" imported)" = 3 ]
+}
+import_bad_rerun_creates_nothing() {
+  grep -q 'posts: created=0 updated=0 skipped=1 failed=3' "$IMPORT_TMP/bad2.out" && [ "$(cat "$IMPORT_TMP/bad2.code")" != 0 ]
+}
+import_content_is_allow_listed() {
+  local c; c="$(jget "$IMPORT_TMP/after-bad.json" good_content)"
+  grep -q 'Safe' <<<"$c" && ! grep -Eq 'onclick|<script|alert[(]1[)]|evil.example' <<<"$c" && grep -q 'youtube.com/embed/abc' <<<"$c"
+}
+import_requires_india_timezone() {
+  [ "$(cat "$IMPORT_TMP/tz.code")" != 0 ] && grep -q 'Asia/Kolkata' "$IMPORT_TMP/tz.out"
 }

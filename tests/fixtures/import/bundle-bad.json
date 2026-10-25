@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-10-25T00:00:00.000Z",
+  "source": "https://blog.moneyfrog.in",
+  "bylines": [
+    { "slug": "codespark-qa-import", "name": "Codespark QA Import", "bio": "Fixture byline for importer checks.", "role": "Tester" }
+  ],
+  "media": [
+    { "oldId": 990010, "sourceUrl": "https://blog.moneyfrog.in/wp-content/uploads/2026/01/shell.php", "uploadPath": "2026/01/shell.php", "alt": "", "oldPaths": [] }
+  ],
+  "items": [
+    { "oldId": 900003, "oldType": "post", "newSlug": "codespark-qa-bad-date", "title": "Codespark QA – Bad date", "html": "<p>x</p>", "excerpt": "", "date": "not-a-date", "modified": "2015-03-05T10:20:31", "topic": "guides", "tags": [], "byline": "codespark-qa-import", "featuredMediaOldId": null, "oldPaths": [] },
+    { "oldId": 900004, "oldType": "post", "newSlug": "codespark-qa-slug-owner", "title": "Codespark QA – Wants a taken slug", "html": "<p>x</p>", "excerpt": "", "date": "2015-03-05T10:20:30", "modified": "2015-03-05T10:20:31", "topic": "guides", "tags": [], "byline": "codespark-qa-import", "featuredMediaOldId": null, "oldPaths": [] },
+    { "oldId": 900005, "oldType": "post", "newSlug": "codespark-qa-good-after-bad", "title": "Codespark QA – Good after bad", "html": "<p onclick=\"x()\">Safe</p><script>alert(1)</script><iframe src=\"https://evil.example/x\"></iframe><iframe src=\"https://www.youtube.com/embed/abc\" width=\"560\"></iframe>", "excerpt": "", "date": "2015-03-06T10:20:30", "modified": "2015-03-06T10:20:31", "topic": "guides", "tags": [], "byline": "codespark-qa-import", "featuredMediaOldId": null, "oldPaths": [] },
+    { "oldId": 900006, "oldType": "post", "newSlug": "codespark-qa-throws", "title": "Codespark QA – Throws", "html": { "not": "text" }, "excerpt": "", "date": "2015-03-07T10:20:30", "modified": "2015-03-07T10:20:31", "topic": "guides", "tags": [], "byline": "codespark-qa-import", "featuredMediaOldId": null, "oldPaths": [] }
+  ]
+}

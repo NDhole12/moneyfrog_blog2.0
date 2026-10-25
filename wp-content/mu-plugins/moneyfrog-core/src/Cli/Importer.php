@@ -90,6 +90,110 @@ final class Importer
         return ['html' => $html, 'failedImages' => $failed];
     }
 
+    public const YOUTUBE_HOSTS = ['www.youtube.com', 'youtube.com', 'www.youtube-nocookie.com'];
+    public const IFRAME_ATTRS = ['src', 'width', 'height', 'title', 'allow', 'allowfullscreen', 'loading', 'frameborder'];
+    public const MEDIA_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'ico'];
+
+    /** Only these extensions may be written into uploads. */
+    public static function isAllowedMediaExtension(string $path): bool
+    {
+        return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::MEDIA_EXTENSIONS, true);
+    }
+
+    /** An SVG is copied only when it carries no script, event handlers or script URLs. */
+    public static function isSafeSvg(string $svg): bool
+    {
+        if (stripos($svg, '<svg') === false) {
+            return false;
+        }
+        return preg_match('/<script|<foreignObject|<!ENTITY|javascript:|\bon[a-z]+\s*=/i', $svg) !== 1;
+    }
+
+    /** True when the site clock is IST (+5:30), the old blog's offset. */
+    public static function isIndiaOffset(string $timezoneString, mixed $gmtOffset): bool
+    {
+        if ($timezoneString !== '') {
+            return in_array($timezoneString, ['Asia/Kolkata', 'Asia/Calcutta'], true);
+        }
+        return abs((float) $gmtOffset - 5.5) < 0.0001;
+    }
+
+    /** "2025-04-11T14:59:37" -> "2025-04-11 14:59:37"; null for empty or impossible dates. */
+    public static function normalizeDate(string $iso): ?string
+    {
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/', $iso, $m) !== 1) {
+            return null;
+        }
+        $value = $m[1] . ' ' . $m[2];
+        $dt = \DateTime::createFromFormat('Y-m-d H:i:s', $value);
+        return ($dt !== false && $dt->format('Y-m-d H:i:s') === $value) ? $value : null;
+    }
+
+    /**
+     * Allow-list clean-up of bundle HTML before saving: no script, no on* handlers, no
+     * javascript: URLs, only YouTube iframes with a fixed attribute set. Runs wp_kses with
+     * the "post" tag set (plus that iframe) when WordPress is loaded.
+     */
+    public static function cleanHtml(string $html): string
+    {
+        $html = (string) preg_replace('#<script\b[^>]*>.*?</script\s*>#is', '', $html);
+        $html = (string) preg_replace('#</?script\b[^>]*>#i', '', $html);
+        $html = (string) preg_replace_callback('/<[a-zA-Z][^>]*>/', static fn (array $m): string => self::cleanTag($m[0]), $html);
+        $html = (string) preg_replace_callback('#<iframe\b[^>]*>(?:.*?</iframe\s*>)?#is', static fn (array $m): string => self::cleanIframe($m[0]), $html);
+        if (function_exists('wp_kses') && function_exists('wp_kses_allowed_html')) {
+            $allowed = wp_kses_allowed_html('post');
+            $allowed['iframe'] = array_fill_keys(self::IFRAME_ATTRS, true);
+            $html = wp_kses($html, $allowed);
+        }
+        return $html;
+    }
+
+    private static function cleanTag(string $tag): string
+    {
+        $tag = (string) preg_replace('/\son[a-z]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $tag);
+        return (string) preg_replace_callback(
+            '/\s(?:href|src|xlink:href|action|formaction)\s*=\s*(?:"([^"]*)"|\'([^\']*)\')/i',
+            static function (array $m): string {
+                $value = html_entity_decode(($m[1] ?? '') !== '' ? $m[1] : ($m[2] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $value = strtolower((string) preg_replace('/[\x00-\x20]+/', '', $value));
+                $bad = str_starts_with($value, 'javascript:') || str_starts_with($value, 'vbscript:')
+                    || (str_starts_with($value, 'data:') && !str_starts_with($value, 'data:image/'));
+                return $bad ? '' : $m[0];
+            },
+            $tag
+        );
+    }
+
+    private static function cleanIframe(string $block): string
+    {
+        if (preg_match('/^<iframe\b([^>]*)>/i', $block, $open) !== 1) {
+            return '';
+        }
+        preg_match_all('/([a-zA-Z][a-zA-Z-]*)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+)))?/', $open[1], $all, PREG_SET_ORDER);
+        $attrs = [];
+        foreach ($all as $a) {
+            $name = strtolower($a[1]);
+            if (in_array($name, self::IFRAME_ATTRS, true)) {
+                $attrs[$name] = html_entity_decode($a[2] ?? ($a[3] ?? ($a[4] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+        }
+        $src = trim($attrs['src'] ?? '');
+        if (str_starts_with($src, '//')) {
+            $src = 'https:' . $src;
+        }
+        $parts = parse_url($src);
+        if ($parts === false || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || !in_array(strtolower((string) ($parts['host'] ?? '')), self::YOUTUBE_HOSTS, true)
+            || isset($parts['user']) || isset($parts['pass'])) {
+            return '';
+        }
+        $out = '<iframe';
+        foreach ($attrs as $name => $value) {
+            $out .= $value === '' && $name !== 'src' ? ' ' . $name : ' ' . $name . '="' . htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+        return $out . '></iframe>';
+    }
+
     /** "2019/01/x-300x200.jpg" lookup key for a URL on the old host, else null. */
     public static function uploadKey(string $url): ?string
     {

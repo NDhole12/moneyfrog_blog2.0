@@ -22,6 +22,7 @@ docker compose run --rm wpcli wp core install --url=http://localhost:8080 \
   --title="Moneyfrog Insights" --admin_user=mf_codespark_qa \
   --admin_email=qa@code-spark.com --skip-email
 docker compose run --rm wpcli wp rewrite structure '/%postname%/' --hard
+docker compose run --rm wpcli wp option update timezone_string Asia/Kolkata   # required: the importer refuses any other offset
 ```
 
 Tests: `composer test` (PHPUnit), `npm test` in `migration/` (vitest),

@@ -46,9 +46,16 @@ final class MediaImporter
         if ($rel === null) {
             return $this->result('failed', false, null, 'unsafe upload path', null);
         }
+        if (!Importer::isAllowedMediaExtension($rel)) {
+            return $this->result('failed', false, null, 'blocked-extension', null);
+        }
         $source = $this->sourceFile($rel);
         if ($source === null) {
             return $this->result('skipped', false, null, 'no local file (missing-media)', null);
+        }
+        $blocked = $this->blockReason($rel, $source);
+        if ($blocked !== null) {
+            return $this->result('failed', false, null, $blocked, null);
         }
         $url = $this->urlFor($rel);
         $dest = $this->uploadsBase . '/' . $rel;
@@ -104,6 +111,18 @@ final class MediaImporter
             $detail = 'alt updated';
         }
         return $this->result($changed ? 'updated' : 'skipped', true, $id, $detail, $url);
+    }
+
+    /** Why a file must not enter uploads, or null. */
+    private function blockReason(string $rel, string $source): ?string
+    {
+        if (!Importer::isAllowedMediaExtension($rel)) {
+            return 'blocked-extension';
+        }
+        if (strtolower(pathinfo($rel, PATHINFO_EXTENSION)) === 'svg' && !Importer::isSafeSvg((string) file_get_contents($source))) {
+            return 'unsafe-svg';
+        }
+        return null;
     }
 
     /** Absolute path of the downloaded file when it exists inside the media dir. */

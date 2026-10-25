@@ -15,6 +15,33 @@ export function isSafeUploadPath(p) {
   return p.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
 }
 
+export const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'ico'];
+
+export function isAllowedExtension(p) {
+  const ext = path.extname(String(p)).slice(1).toLowerCase();
+  return ALLOWED_EXTENSIONS.includes(ext);
+}
+
+/** Body must look like the file type its extension claims (rejects soft-404 HTML pages). */
+export function looksLikeExpectedType(ext, contentType, body) {
+  const ct = String(contentType ?? '').toLowerCase();
+  const head = body.subarray(0, 16);
+  const startsWith = (...bytes) => bytes.every((b, i) => head[i] === b);
+  switch (ext) {
+    case 'jpg': case 'jpeg': return ct.startsWith('image/') && startsWith(0xff, 0xd8, 0xff);
+    case 'png': return ct.startsWith('image/') && startsWith(0x89, 0x50, 0x4e, 0x47);
+    case 'gif': return ct.startsWith('image/') && startsWith(0x47, 0x49, 0x46, 0x38);
+    case 'webp': return ct.startsWith('image/') && head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP';
+    case 'pdf': return ct.startsWith('application/pdf') && head.subarray(0, 4).toString('latin1') === '%PDF';
+    case 'ico': return ct.startsWith('image/') && startsWith(0, 0, 1, 0);
+    case 'svg': {
+      const text = body.toString('utf8');
+      return ct.startsWith('image/svg') && /<svg/i.test(text) && !/<script|<foreignObject|javascript:|\bon[a-z]+\s*=/i.test(text);
+    }
+    default: return false;
+  }
+}
+
 /**
  * Polite read-only download of the media listed in a bundle. Plain GETs, fixed
  * User-Agent, no cookies or auth, >= delayMs between requests, 3 retries with
@@ -72,7 +99,7 @@ export async function downloadMedia({
         url = new URL(res.headers.get('location'), url).toString();
         continue;
       }
-      if (res.status === 200) return { status: 200, body: Buffer.from(await res.arrayBuffer()) };
+      if (res.status === 200) return { status: 200, body: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type') };
       return { status: res.status };
     }
     return { status: 'too-many-redirects' };
@@ -83,6 +110,10 @@ export async function downloadMedia({
     done++;
     if (!isSafeUploadPath(m.uploadPath)) {
       manifest[m.oldId] = { uploadPath: m.uploadPath ?? null, ok: false, status: 'bad-path', bytes: 0 };
+      continue;
+    }
+    if (!isAllowedExtension(m.uploadPath)) {
+      manifest[m.oldId] = { uploadPath: m.uploadPath, ok: false, status: 'blocked-extension', bytes: 0 };
       continue;
     }
     const dest = path.join(root, ...m.uploadPath.split('/'));
@@ -96,7 +127,10 @@ export async function downloadMedia({
       continue;
     }
     const result = await fetchOne(m.sourceUrl);
-    if (result.status === 200) {
+    if (result.status === 200 && !looksLikeExpectedType(path.extname(m.uploadPath).slice(1).toLowerCase(), result.contentType, result.body)) {
+      manifest[m.oldId] = { uploadPath: m.uploadPath, ok: false, status: 'bad-content', bytes: 0 };
+      consecutiveErrors = 0;
+    } else if (result.status === 200) {
       await mkdir(path.dirname(dest), { recursive: true });
       await writeFile(`${dest}.part`, result.body);
       await rename(`${dest}.part`, dest);
@@ -124,7 +158,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const outRoot = path.join(here, '..', 'output');
   const bundlePath = arg('bundle', path.join(outRoot, 'bundle.json'));
   const outDir = arg('out', path.join(outRoot, 'media'));
-  const delayMs = Number(arg('delay', '1000'));
+  const delayMs = Math.max(1000, Number(arg('delay', '1000')) || 1000);
   (async () => {
     const manifest = await downloadMedia({
       bundlePath, outDir, delayMs,

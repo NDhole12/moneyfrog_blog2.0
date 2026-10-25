@@ -14,7 +14,7 @@ use MoneyfrogCore\ServiceUser;
 final class ImportRunner
 {
     private const HASH_META = '_mf_import_hash';
-    private const HASH_VERSION = '1';
+    private const HASH_VERSION = '2';
 
     /** @var array<string,array<string,int>> */
     private array $counts;
@@ -48,12 +48,22 @@ final class ImportRunner
             fn ($i) => $this->only === null || (int) ($i['oldId'] ?? 0) === $this->only
         ));
 
-        $this->authorId = $this->dryRun ? 0 : ServiceUser::ensure();
-        $this->importTopics();
+        try {
+            $this->authorId = $this->dryRun ? 0 : ServiceUser::ensure();
+            $this->importTopics();
+        } catch (\Throwable $e) {
+            $this->bump('topics', 'failed');
+            $this->log('failed-setup', null, $this->safeMessage($e));
+        }
         $this->importBylines((array) ($bundle['bylines'] ?? []));
         $this->importMedia($this->mediaFor((array) ($bundle['media'] ?? []), $items));
         foreach ($items as $item) {
-            $this->importItem((array) $item);
+            try {
+                $this->importItem((array) $item);
+            } catch (\Throwable $e) {
+                $this->bump('posts', 'failed');
+                $this->log('failed', (int) (((array) $item)['oldId'] ?? 0), $this->safeMessage($e));
+            }
         }
 
         wp_defer_term_counting(false);
@@ -93,42 +103,53 @@ final class ImportRunner
     private function importBylines(array $bylines): void
     {
         foreach ($bylines as $b) {
-            $slug = (string) ($b['slug'] ?? '');
-            $name = (string) ($b['name'] ?? '');
-            if ($slug === '' || $name === '') {
+            try {
+                $this->importByline((array) $b);
+            } catch (\Throwable $e) {
                 $this->bump('bylines', 'failed');
-                $this->log('failed-byline', null, 'byline without slug or name');
-                continue;
+                $this->log('failed-byline', null, $this->safeMessage($e));
             }
-            $bio = (string) ($b['bio'] ?? '');
-            $role = (string) ($b['role'] ?? '');
-            $term = get_term_by('slug', $slug, Byline::TAXONOMY);
-            if ($term instanceof \WP_Term) {
-                $same = $term->name === $name
-                    && (string) get_term_meta($term->term_id, 'mf_bio', true) === $bio
-                    && (string) get_term_meta($term->term_id, 'mf_role', true) === $role;
-                if ($same || $this->dryRun) {
-                    $this->bump('bylines', $same ? 'skipped' : 'updated');
-                    continue;
-                }
-                wp_update_term($term->term_id, Byline::TAXONOMY, ['name' => $name]);
-                $this->saveBylineMeta((int) $term->term_id, $bio, $role);
-                $this->bump('bylines', 'updated');
-                continue;
-            }
-            if ($this->dryRun) {
-                $this->bump('bylines', 'created');
-                continue;
-            }
-            $res = wp_insert_term($name, Byline::TAXONOMY, ['slug' => $slug]);
-            if (is_wp_error($res)) {
-                $this->bump('bylines', 'failed');
-                $this->log('failed-byline', null, $slug . ': ' . $res->get_error_message());
-                continue;
-            }
-            $this->saveBylineMeta((int) $res['term_id'], $bio, $role);
-            $this->bump('bylines', 'created');
         }
+    }
+
+    /** @param array<string,mixed> $b */
+    private function importByline(array $b): void
+    {
+        $slug = (string) ($b['slug'] ?? '');
+        $name = (string) ($b['name'] ?? '');
+        if ($slug === '' || $name === '') {
+            $this->bump('bylines', 'failed');
+            $this->log('failed-byline', null, 'byline without slug or name');
+            return;
+        }
+        $bio = (string) ($b['bio'] ?? '');
+        $role = (string) ($b['role'] ?? '');
+        $term = get_term_by('slug', $slug, Byline::TAXONOMY);
+        if ($term instanceof \WP_Term) {
+            $same = $term->name === $name
+                && (string) get_term_meta($term->term_id, 'mf_bio', true) === $bio
+                && (string) get_term_meta($term->term_id, 'mf_role', true) === $role;
+            if ($same || $this->dryRun) {
+                $this->bump('bylines', $same ? 'skipped' : 'updated');
+                return;
+            }
+            wp_update_term($term->term_id, Byline::TAXONOMY, ['name' => $name]);
+            $this->saveBylineMeta((int) $term->term_id, $bio, $role);
+            $this->bump('bylines', 'updated');
+            return;
+        }
+        if ($this->dryRun) {
+            $this->bump('bylines', 'created');
+            return;
+        }
+        $res = wp_insert_term($name, Byline::TAXONOMY, ['slug' => $slug]);
+        if (is_wp_error($res)) {
+            $this->bump('bylines', 'failed');
+            $this->log('failed-byline', null, $slug . ': ' . $res->get_error_message());
+            return;
+        }
+        $this->saveBylineMeta((int) $res['term_id'], $bio, $role);
+        $this->bump('bylines', 'created');
     }
 
     private function saveBylineMeta(int $termId, string $bio, string $role): void
@@ -167,15 +188,29 @@ final class ImportRunner
     private function importMedia(array $media): void
     {
         foreach ($media as $m) {
+            try {
+                $this->importOneMedia((array) $m);
+            } catch (\Throwable $e) {
+                $this->bump('media', 'failed');
+                $this->log('failed-media', (int) (((array) $m)['oldId'] ?? 0), $this->safeMessage($e));
+            }
+        }
+    }
+
+    /** @param array<string,mixed> $m */
+    private function importOneMedia(array $m): void
+    {
+        {
             $oldId = (int) ($m['oldId'] ?? 0);
-            $res = $this->media->import((array) $m, $this->dryRun);
+            $res = $this->media->import($m, $this->dryRun);
             $this->bump('media', $res['status']);
             $this->mediaState[$oldId] = ['ok' => $res['ok'], 'attachmentId' => $res['attachmentId'], 'url' => $res['url']];
             if ($res['ok'] && $res['url'] !== null) {
                 $this->urlMap[Importer::OLD_UPLOADS_URL . (string) $m['uploadPath']] = $res['url'];
             }
             if ($res['status'] === 'failed') {
-                $this->log('failed-media', $oldId, $res['detail']);
+                $blocked = in_array($res['detail'], ['blocked-extension', 'unsafe-svg'], true);
+                $this->log($blocked ? $res['detail'] : 'failed-media', $oldId, $blocked ? (string) ($m['uploadPath'] ?? '') : $res['detail']);
             } elseif (!$res['ok']) {
                 $this->log('missing-media', $oldId, (string) ($m['uploadPath'] ?? ''));
             } elseif (in_array($res['detail'], ['copied-as-is'], true)) {
@@ -195,6 +230,20 @@ final class ImportRunner
             $this->log('failed', $oldId, 'item without id, slug or title');
             return;
         }
+        foreach (['title', 'html', 'excerpt', 'newSlug', 'topic', 'byline', 'date', 'modified'] as $field) {
+            if (isset($item[$field]) && !is_scalar($item[$field])) {
+                throw new \InvalidArgumentException('field "' . $field . '" is not text');
+            }
+        }
+        $date = Importer::normalizeDate((string) ($item['date'] ?? ''));
+        if ($date === null) {
+            throw new \RuntimeException('missing or invalid date');
+        }
+        $modifiedRaw = (string) ($item['modified'] ?? '');
+        $modified = $modifiedRaw === '' ? $date : Importer::normalizeDate($modifiedRaw);
+        if ($modified === null) {
+            throw new \RuntimeException('invalid modified date');
+        }
         $topic = get_term_by('slug', (string) ($item['topic'] ?? ''), 'category');
         $byline = get_term_by('slug', (string) ($item['byline'] ?? ''), Byline::TAXONOMY);
         if (!$this->dryRun && (!$topic instanceof \WP_Term || !$byline instanceof \WP_Term)) {
@@ -204,6 +253,7 @@ final class ImportRunner
         }
 
         $rewritten = Importer::rewriteContent((string) ($item['html'] ?? ''), $this->urlMap);
+        $rewritten['html'] = Importer::cleanHtml($rewritten['html']);
         foreach ($rewritten['failedImages'] as $url) {
             $this->counts['failed-image']['count']++;
             $this->log('failed-image', $oldId, $url);
@@ -221,11 +271,9 @@ final class ImportRunner
             }
         }
 
-        $date = $this->wpDate((string) ($item['date'] ?? ''));
-        $modified = $this->wpDate((string) ($item['modified'] ?? '')) ?: $date;
         $tags = array_values(array_map('strval', (array) ($item['tags'] ?? [])));
         $hash = Importer::contentHash([
-            'v' => self::HASH_VERSION,
+            'v' => self::HASH_VERSION, 'tz' => (string) get_option('timezone_string') . '|' . (string) get_option('gmt_offset'),
             'title' => (string) $item['title'], 'content' => $rewritten['html'], 'excerpt' => (string) ($item['excerpt'] ?? ''),
             'slug' => $slug, 'date' => $date, 'modified' => $modified, 'topic' => (string) ($item['topic'] ?? ''),
             'tags' => $tags, 'byline' => (string) ($item['byline'] ?? ''), 'featured' => $featuredOld, 'thumb' => $thumbId,
@@ -235,6 +283,12 @@ final class ImportRunner
         if ($existing !== null && (string) get_post_meta($existing, self::HASH_META, true) === $hash
             && (int) get_post_thumbnail_id($existing) === (int) $thumbId) {
             $this->bump('posts', 'skipped');
+            return;
+        }
+        $owner = $this->slugOwner($slug, $existing);
+        if ($owner !== null) {
+            $this->bump('posts', 'failed');
+            $this->log('slug-taken', $oldId, 'slug "' . $slug . '" is owned by post ' . $owner);
             return;
         }
         if ($this->dryRun) {
@@ -255,6 +309,7 @@ final class ImportRunner
             'post_author' => $this->authorId,
             'comment_status' => 'closed',
             'ping_status' => 'closed',
+            'meta_input' => ['_mf_old_id' => $oldId, '_mf_old_type' => $oldType],
         ]), true);
         if (is_wp_error($postId) || (int) $postId === 0) {
             $this->bump('posts', 'failed');
@@ -268,8 +323,6 @@ final class ImportRunner
             return;
         }
 
-        update_post_meta($postId, '_mf_old_id', $oldId);
-        update_post_meta($postId, '_mf_old_type', $oldType);
         wp_set_object_terms($postId, [(int) $topic->term_id], 'category');
         wp_set_object_terms($postId, $tags, 'post_tag');
         wp_set_object_terms($postId, [(int) $byline->term_id], Byline::TAXONOMY);
@@ -312,10 +365,25 @@ final class ImportRunner
         clean_post_cache($postId);
     }
 
-    /** "2025-04-11T14:59:37" -> "2025-04-11 14:59:37" (empty when unusable). */
-    private function wpDate(string $iso): string
+    /** ID of another post that owns the slug (0 when the slug is only reserved), else null. */
+    private function slugOwner(string $slug, ?int $existing): ?int
     {
-        return preg_match('/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/', $iso, $m) === 1 ? $m[1] . ' ' . $m[2] : '';
+        global $wpdb;
+        $owner = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_name = %s AND post_type = 'post' AND post_status <> 'auto-draft' AND ID <> %d LIMIT 1",
+            $slug,
+            (int) $existing
+        ));
+        if ($owner > 0) {
+            return $owner;
+        }
+        return wp_unique_post_slug($slug, (int) $existing, 'publish', 'post', 0) === $slug ? null : 0;
+    }
+
+    /** Message only: no stack trace, no file paths. */
+    private function safeMessage(\Throwable $e): string
+    {
+        return substr(str_replace([ABSPATH, "\n"], ['', ' '], $e->getMessage()), 0, 300);
     }
 
     private function bump(string $group, string $key): void
