@@ -75,6 +75,11 @@
   --pick-thumb-w: 150px; --pick-thumb-h: 112px;
   --pick-pad-y: 14px; --pick-pad-x: 22px; --pick-gap: 12px;
   --pick-arrow: 20px;
+  --pick-n-col: 56px;       /* number column */
+  --pick-shift: 3px;        /* hover nudge for arrows */
+  --ls-pick-topic: .28em;
+  --picks-bar-w: 64px; --picks-bar-h: 3px;
+  --shadow-pick: 0 6px 16px -12px rgba(70, 52, 18, .35);
   --radius-pick: 12px; --radius-pick-thumb: 10px;
   --pick-bg: #f5f1e8;       /* slightly lighter than --band, as in the owner reference */
   --fs-featured: 22px;      /* featured story title */
@@ -104,5 +109,5 @@
   --gap-section: 28px;
   --fs-pick: 17px; --fs-pick-n: 22px; --fs-picks-h: 22px;
   --pick-thumb-w: 96px; --pick-thumb-h: 72px;
-  --pick-pad-y: 12px; --pick-pad-x: 14px; --pick-arrow: 16px;
+  --pick-pad-y: 12px; --pick-pad-x: 14px; --pick-arrow: 16px; --pick-n-col: 28px;
 } }

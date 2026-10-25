@@ -225,15 +225,22 @@ home_sections() {
   [ "$(grep -o 'class="topic-tile" href="[^"]*/category/[a-z-]*/"' <<<"$h" | wc -l | tr -d ' ')" = 6 ]
 }
 editors_picks_layout() {
-  local h sec; h="$(home_html)"
-  grep -q '<h2 class="picks-head__h"[^>]*>Editor’s Picks</h2>' <<<"$h" || grep -q '<h2 class="picks-head__h"[^>]*>Editor&rsquo;s Picks</h2>' <<<"$h" || grep -q 'picks-head__h[^>]*>Editor.\{1,8\}s Picks<' <<<"$h" || return 1
-  sec="$(tr '
-' ' ' <<<"$h" | grep -o '<ol class="picks__list">.*</ol>' | sed 's#</ol>.*#</ol>#')"
+  local h flat sec item
+  h="$(home_html)"; flat="$(tr '
+' ' ' <<<"$h")"
+  grep -qE '<h2 class="picks-head__h"[^>]*>Editor(’|&rsquo;|&#8217;|'"'"')s Picks</h2>' <<<"$flat" || return 1
+  grep -qE '<a class="picks-head__all"[^>]*aria-label="All articles"' <<<"$flat" || return 1
+  sec="$(grep -o '<ol class="picks__list">.*' <<<"$flat" | sed 's#</ol>.*#</ol>#')"
   [ "$(grep -o '<li class="picks__item">' <<<"$sec" | wc -l | tr -d ' ')" = 4 ] || return 1
-  [ "$(grep -o 'class="picks__n"' <<<"$sec" | wc -l | tr -d ' ')" = 4 ] || return 1
-  [ "$(grep -o 'class="card__eyebrow picks__topic"' <<<"$sec" | wc -l | tr -d ' ')" = 4 ] || return 1
-  [ "$(grep -o 'class="picks__link" href=' <<<"$sec" | wc -l | tr -d ' ')" = 4 ] || return 1
-  [ "$(grep -oE '<img |class="mf-cover' <<<"$sec" | wc -l | tr -d ' ')" -ge 4 ]
+  while IFS= read -r item; do
+    [ "$(grep -o '<a ' <<<"$item" | wc -l | tr -d ' ')" = 1 ] || return 1
+    grep -q 'class="picks__n"' <<<"$item" || return 1
+    grep -q 'class="card__eyebrow picks__topic"' <<<"$item" || return 1
+    grep -q 'class="picks__link" href=' <<<"$item" || return 1
+    grep -qE '<img |class="mf-cover' <<<"$item" || return 1
+    grep -q 'class="picks__arrow" aria-hidden="true"' <<<"$item" || return 1
+  done < <(sed 's#<li class="picks__item">#
+&#g' <<<"$sec" | grep '^<li class="picks__item">')
 }
 cover_for_no_image() { home_html | grep -q 'class="mf-cover'; }
 category_page() {
