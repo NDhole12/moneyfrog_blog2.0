@@ -41,7 +41,6 @@ final class ImporterSafetyTest extends TestCase
     public function test_normalize_date_is_strict(): void
     {
         $this->assertSame('2025-04-11 14:59:37', Importer::normalizeDate('2025-04-11T14:59:37'));
-        $this->assertSame('2025-04-11 14:59:37', Importer::normalizeDate('2025-04-11 14:59:37'));
         $this->assertNull(Importer::normalizeDate(''));
         $this->assertNull(Importer::normalizeDate('not-a-date'));
         $this->assertNull(Importer::normalizeDate('2025-13-40T00:00:00'));
@@ -59,20 +58,45 @@ final class ImporterSafetyTest extends TestCase
 
     public function test_allowed_extensions(): void
     {
-        foreach (['a.JPG', 'a.jpeg', 'a.png', 'a.gif', 'a.webp', 'a.svg', 'a.pdf', 'a.ico'] as $ok) {
+        foreach (['a.JPG', 'a.jpeg', 'a.png', 'a.gif', 'a.webp', 'a.pdf', 'a.ico'] as $ok) {
             $this->assertTrue(Importer::isAllowedMediaExtension($ok), $ok);
         }
-        foreach (['a.php', 'a.phtml', 'a.html', 'a.js', 'a.jpg.php', 'a', 'a.svgz'] as $bad) {
+        foreach (['a.php', 'a.phtml', 'a.html', 'a.js', 'a.jpg.php', 'a', 'a.svg', 'a.svgz'] as $bad) {
             $this->assertFalse(Importer::isAllowedMediaExtension($bad), $bad);
         }
     }
 
-    public function test_svg_safety(): void
+    public function test_magic_bytes_must_match_the_extension(): void
     {
-        $this->assertTrue(Importer::isSafeSvg('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>'));
-        $this->assertFalse(Importer::isSafeSvg('<svg><script>alert(1)</script></svg>'));
-        $this->assertFalse(Importer::isSafeSvg('<svg onload="x()"></svg>'));
-        $this->assertFalse(Importer::isSafeSvg('<svg><a xlink:href="javascript:x()"/></svg>'));
-        $this->assertFalse(Importer::isSafeSvg('<html></html>'));
+        $jpg = "\xFF\xD8\xFFrest";
+        $png = "\x89PNG\r\n\x1A\n";
+        $this->assertTrue(Importer::magicMatches('a.jpg', $jpg));
+        $this->assertTrue(Importer::magicMatches('a.JPEG', $jpg));
+        $this->assertTrue(Importer::magicMatches('a.png', $png));
+        $this->assertTrue(Importer::magicMatches('a.gif', 'GIF89a'));
+        $this->assertTrue(Importer::magicMatches('a.webp', 'RIFF....WEBPVP8 '));
+        $this->assertTrue(Importer::magicMatches('a.pdf', '%PDF-1.7'));
+        $this->assertTrue(Importer::magicMatches('a.ico', "\x00\x00\x01\x00\x01"));
+        $this->assertFalse(Importer::magicMatches('a.jpg', '<html>not found</html>'));
+        $this->assertTrue(Importer::magicMatches('a.jpeg', 'RIFF....WEBPVP8 '), 'real WebP saved as .jpeg');
+        $this->assertFalse(Importer::magicMatches('a.pdf', $jpg));
+        $this->assertFalse(Importer::magicMatches('a.ico', $png));
+        $this->assertFalse(Importer::magicMatches('a.svg', '<svg></svg>'));
+        $this->assertFalse(Importer::magicMatches('a.php', '<?php'));
+    }
+
+    public function test_clean_html_drops_every_data_url(): void
+    {
+        $out = Importer::cleanHtml('<a href="data:text/html;base64,AAAA">x</a><img src="data:image/png;base64,AAAA" alt="">');
+        $this->assertStringNotContainsString('data:', $out);
+    }
+
+    public function test_normalize_date_rejects_zone_suffix_and_extra_text(): void
+    {
+        $this->assertNull(Importer::normalizeDate('2025-04-11 14:59:37'));
+        $this->assertNull(Importer::normalizeDate('2025-04-11T14:59:37Z'));
+        $this->assertNull(Importer::normalizeDate('2025-04-11T14:59:37+05:30'));
+        $this->assertNull(Importer::normalizeDate('2025-04-11T14:59:37.000'));
+        $this->assertNull(Importer::normalizeDate('2025-04-11T14:59:37 junk'));
     }
 }

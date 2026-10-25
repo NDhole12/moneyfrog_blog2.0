@@ -15,29 +15,29 @@ export function isSafeUploadPath(p) {
   return p.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
 }
 
-export const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'ico'];
+export const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'ico'];
 
 export function isAllowedExtension(p) {
   const ext = path.extname(String(p)).slice(1).toLowerCase();
   return ALLOWED_EXTENSIONS.includes(ext);
 }
 
-/** Body must look like the file type its extension claims (rejects soft-404 HTML pages). */
+/**
+ * The bytes must look like the type the extension claims (rejects soft-404 HTML pages).
+ * Pass contentType null to check the magic bytes only (files already on disk).
+ */
 export function looksLikeExpectedType(ext, contentType, body) {
   const ct = String(contentType ?? '').toLowerCase();
+  const ctIs = (prefix) => contentType === null || ct.startsWith(prefix);
   const head = body.subarray(0, 16);
   const startsWith = (...bytes) => bytes.every((b, i) => head[i] === b);
+  const raster = startsWith(0xff, 0xd8, 0xff) || startsWith(0x89, 0x50, 0x4e, 0x47) || startsWith(0x47, 0x49, 0x46, 0x38)
+    || (head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP');
   switch (ext) {
-    case 'jpg': case 'jpeg': return ct.startsWith('image/') && startsWith(0xff, 0xd8, 0xff);
-    case 'png': return ct.startsWith('image/') && startsWith(0x89, 0x50, 0x4e, 0x47);
-    case 'gif': return ct.startsWith('image/') && startsWith(0x47, 0x49, 0x46, 0x38);
-    case 'webp': return ct.startsWith('image/') && head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP';
-    case 'pdf': return ct.startsWith('application/pdf') && head.subarray(0, 4).toString('latin1') === '%PDF';
-    case 'ico': return ct.startsWith('image/') && startsWith(0, 0, 1, 0);
-    case 'svg': {
-      const text = body.toString('utf8');
-      return ct.startsWith('image/svg') && /<svg/i.test(text) && !/<script|<foreignObject|javascript:|\bon[a-z]+\s*=/i.test(text);
-    }
+    // A raster extension accepts any raster format (the old blog has a real WebP saved as .jpeg).
+    case 'jpg': case 'jpeg': case 'png': case 'gif': case 'webp': return ctIs('image/') && raster;
+    case 'pdf': return ctIs('application/pdf') && head.subarray(0, 4).toString('latin1') === '%PDF';
+    case 'ico': return ctIs('image/') && startsWith(0, 0, 1, 0);
     default: return false;
   }
 }
@@ -122,10 +122,12 @@ export async function downloadMedia({
       continue;
     }
     const existing = await stat(dest).catch(() => null);
-    if (existing && existing.isFile() && existing.size > 0) {
+    if (existing && existing.isFile() && existing.size > 0
+      && looksLikeExpectedType(path.extname(m.uploadPath).slice(1).toLowerCase(), null, (await readFile(dest)).subarray(0, 16))) {
       manifest[m.oldId] = { uploadPath: m.uploadPath, ok: true, status: 200, bytes: existing.size };
       continue;
     }
+    // A cached file that fails the check is fetched once more; if that is bad too it is recorded as bad-content.
     const result = await fetchOne(m.sourceUrl);
     if (result.status === 200 && !looksLikeExpectedType(path.extname(m.uploadPath).slice(1).toLowerCase(), result.contentType, result.body)) {
       manifest[m.oldId] = { uploadPath: m.uploadPath, ok: false, status: 'bad-content', bytes: 0 };

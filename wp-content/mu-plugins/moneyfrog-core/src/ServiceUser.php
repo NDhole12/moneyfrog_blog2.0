@@ -41,6 +41,9 @@ final class ServiceUser
     /** Create the account if missing (random 48-character password, never shown). */
     public static function ensure(): int
     {
+        if (apply_filters('mf_service_user_force_failure', false)) { // test hook: lets smoke prove setup failures abort
+            throw new \RuntimeException('forced service user failure');
+        }
         $existing = get_user_by('login', self::LOGIN);
         if ($existing instanceof \WP_User) {
             return (int) $existing->ID;

@@ -62,6 +62,14 @@ import_scenario() {
   rm -rf "$IMPORT_WORK_DIR"; mkdir -p "$IMPORT_WORK_DIR"
   cp -r tests/fixtures/import/bundle.json tests/fixtures/import/media "$IMPORT_WORK_DIR/"
   import_cleanup
+  local hook=wp-content/mu-plugins/zz-codespark-qa-fail-setup.php
+  printf '%s
+' '<?php' "add_filter('mf_service_user_force_failure', '__return_true');" > "$hook"
+  wp_nopath mf import "$IMPORT_BUNDLE_IN_CONTAINER" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" >"$IMPORT_TMP/setupfail.out" 2>&1; echo $? >"$IMPORT_TMP/setupfail.code"
+  cp "$IMPORT_WORK_DIR/import-log.json" "$IMPORT_TMP/setupfail-log.json" 2>/dev/null
+  rm -f "$hook"
+  import_state >"$IMPORT_TMP/after-setupfail.json"
+  rm -f "$IMPORT_WORK_DIR/import-log.json"
   wp_nopath mf import "$IMPORT_BUNDLE_IN_CONTAINER" "--media-dir=$IMPORT_MEDIA_IN_CONTAINER" --dry-run >"$IMPORT_TMP/dry.out" 2>&1; echo $? >"$IMPORT_TMP/dry.code"
   [ -f "$IMPORT_WORK_DIR/import-log.json" ] || [ -f "$IMPORT_WORK_DIR/import-log-dry-run.json" ] && echo yes >"$IMPORT_TMP/dry.logfile"
   import_state >"$IMPORT_TMP/after-dry.json"
@@ -157,4 +165,8 @@ import_content_is_allow_listed() {
 }
 import_requires_india_timezone() {
   [ "$(cat "$IMPORT_TMP/tz.code")" != 0 ] && grep -q 'Asia/Kolkata' "$IMPORT_TMP/tz.out"
+}
+
+import_setup_failure_aborts() {
+  [ "$(cat "$IMPORT_TMP/setupfail.code")" != 0 ] && [ -s "$IMPORT_TMP/setupfail-log.json" ]     && grep -q '"type": "failed-setup"' "$IMPORT_TMP/setupfail-log.json" && grep -q 'posts: created=0 updated=0 skipped=0 failed=0' "$IMPORT_TMP/setupfail.out"     && grep -q 'media: created=0 updated=0 skipped=0 failed=0' "$IMPORT_TMP/setupfail.out"     && [ "$(jget "$IMPORT_TMP/after-setupfail.json" posts)" = 0 ] && [ "$(jget "$IMPORT_TMP/after-setupfail.json" attachments)" = 0 ]     && [ "$(jget "$IMPORT_TMP/after-setupfail.json" bylines)" = 0 ]
 }

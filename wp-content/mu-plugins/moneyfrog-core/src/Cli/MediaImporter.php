@@ -119,10 +119,12 @@ final class MediaImporter
         if (!Importer::isAllowedMediaExtension($rel)) {
             return 'blocked-extension';
         }
-        if (strtolower(pathinfo($rel, PATHINFO_EXTENSION)) === 'svg' && !Importer::isSafeSvg((string) file_get_contents($source))) {
-            return 'unsafe-svg';
+        $handle = fopen($source, 'rb');
+        $head = $handle === false ? '' : (string) fread($handle, 16);
+        if ($handle !== false) {
+            fclose($handle);
         }
-        return null;
+        return Importer::magicMatches($rel, $head) ? null : 'bad-content';
     }
 
     /** Absolute path of the downloaded file when it exists inside the media dir. */

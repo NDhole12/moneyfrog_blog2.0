@@ -92,7 +92,7 @@ final class Importer
 
     public const YOUTUBE_HOSTS = ['www.youtube.com', 'youtube.com', 'www.youtube-nocookie.com'];
     public const IFRAME_ATTRS = ['src', 'width', 'height', 'title', 'allow', 'allowfullscreen', 'loading', 'frameborder'];
-    public const MEDIA_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'ico'];
+    public const MEDIA_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'ico'];
 
     /** Only these extensions may be written into uploads. */
     public static function isAllowedMediaExtension(string $path): bool
@@ -100,13 +100,22 @@ final class Importer
         return in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), self::MEDIA_EXTENSIONS, true);
     }
 
-    /** An SVG is copied only when it carries no script, event handlers or script URLs. */
-    public static function isSafeSvg(string $svg): bool
+    /**
+     * The first bytes of a file must match what its extension claims (no HTML soft-404s, no
+     * disguised files). Raster image extensions accept any raster format: the old blog has a
+     * real WebP saved as .jpeg, and the image editor decodes by content, not by name.
+     */
+    public static function magicMatches(string $path, string $head): bool
     {
-        if (stripos($svg, '<svg') === false) {
-            return false;
-        }
-        return preg_match('/<script|<foreignObject|<!ENTITY|javascript:|\bon[a-z]+\s*=/i', $svg) !== 1;
+        $starts = static fn (string $prefix): bool => str_starts_with($head, $prefix);
+        $raster = $starts("\xFF\xD8\xFF") || $starts("\x89PNG\r\n\x1A\n") || $starts('GIF87a') || $starts('GIF89a')
+            || ($starts('RIFF') && substr($head, 8, 4) === 'WEBP');
+        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg', 'png', 'gif', 'webp' => $raster,
+            'pdf' => $starts('%PDF'),
+            'ico' => $starts("\x00\x00\x01\x00"),
+            default => false,
+        };
     }
 
     /** True when the site clock is IST (+5:30), the old blog's offset. */
@@ -121,7 +130,7 @@ final class Importer
     /** "2025-04-11T14:59:37" -> "2025-04-11 14:59:37"; null for empty or impossible dates. */
     public static function normalizeDate(string $iso): ?string
     {
-        if (preg_match('/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/', $iso, $m) !== 1) {
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})$/', $iso, $m) !== 1) {
             return null;
         }
         $value = $m[1] . ' ' . $m[2];
@@ -157,7 +166,7 @@ final class Importer
                 $value = html_entity_decode(($m[1] ?? '') !== '' ? $m[1] : ($m[2] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $value = strtolower((string) preg_replace('/[\x00-\x20]+/', '', $value));
                 $bad = str_starts_with($value, 'javascript:') || str_starts_with($value, 'vbscript:')
-                    || (str_starts_with($value, 'data:') && !str_starts_with($value, 'data:image/'));
+                    || str_starts_with($value, 'data:');
                 return $bad ? '' : $m[0];
             },
             $tag
@@ -234,7 +243,11 @@ final class Importer
         $src = self::getAttr($tag, 'src');
         if ($src !== null) {
             $decoded = html_entity_decode($src, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            if (!str_starts_with($decoded, 'data:')) {
+            if (str_starts_with(strtolower(ltrim($decoded)), 'data:')) {
+                $failed[] = $decoded;
+                return '';
+            }
+            {
                 $key = self::uploadKey($decoded);
                 if ($key !== null) {
                     $new = self::lookup($index, $key);

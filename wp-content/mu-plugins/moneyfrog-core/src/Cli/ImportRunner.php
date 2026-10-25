@@ -41,22 +41,31 @@ final class ImportRunner
      */
     public function run(array $bundle): array
     {
-        $this->quietenSideEffects();
-        wp_defer_term_counting(true);
-        $items = array_values(array_filter(
-            (array) ($bundle['items'] ?? []),
-            fn ($i) => $this->only === null || (int) ($i['oldId'] ?? 0) === $this->only
-        ));
-
+        // Setup and bundle parsing come first; any failure aborts before a single item, media or byline write.
         try {
+            $this->quietenSideEffects();
+            wp_defer_term_counting(true);
+            $items = array_values(array_filter(
+                (array) ($bundle['items'] ?? []),
+                fn ($i) => $this->only === null || (int) ((array) $i)['oldId'] === $this->only
+            ));
+            $media = $this->mediaFor((array) ($bundle['media'] ?? []), $items);
+            $bylines = (array) ($bundle['bylines'] ?? []);
             $this->authorId = $this->dryRun ? 0 : ServiceUser::ensure();
             $this->importTopics();
+            if ($this->counts['topics']['failed'] > 0) {
+                throw new \RuntimeException('topic setup failed');
+            }
         } catch (\Throwable $e) {
-            $this->bump('topics', 'failed');
+            if ($this->counts['topics']['failed'] === 0) {
+                $this->bump('topics', 'failed');
+            }
             $this->log('failed-setup', null, $this->safeMessage($e));
+            wp_defer_term_counting(false);
+            return ['counts' => $this->counts, 'events' => $this->events, 'dryRun' => $this->dryRun, 'aborted' => true];
         }
-        $this->importBylines((array) ($bundle['bylines'] ?? []));
-        $this->importMedia($this->mediaFor((array) ($bundle['media'] ?? []), $items));
+        $this->importBylines($bylines);
+        $this->importMedia($media);
         foreach ($items as $item) {
             try {
                 $this->importItem((array) $item);
@@ -67,7 +76,7 @@ final class ImportRunner
         }
 
         wp_defer_term_counting(false);
-        return ['counts' => $this->counts, 'events' => $this->events, 'dryRun' => $this->dryRun];
+        return ['counts' => $this->counts, 'events' => $this->events, 'dryRun' => $this->dryRun, 'aborted' => false];
     }
 
     /** The importer must never ping, enclose or otherwise reach out while publishing. */
@@ -209,7 +218,7 @@ final class ImportRunner
                 $this->urlMap[Importer::OLD_UPLOADS_URL . (string) $m['uploadPath']] = $res['url'];
             }
             if ($res['status'] === 'failed') {
-                $blocked = in_array($res['detail'], ['blocked-extension', 'unsafe-svg'], true);
+                $blocked = in_array($res['detail'], ['blocked-extension', 'bad-content'], true);
                 $this->log($blocked ? $res['detail'] : 'failed-media', $oldId, $blocked ? (string) ($m['uploadPath'] ?? '') : $res['detail']);
             } elseif (!$res['ok']) {
                 $this->log('missing-media', $oldId, (string) ($m['uploadPath'] ?? ''));

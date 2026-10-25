@@ -58,9 +58,9 @@ final class ImporterTest extends TestCase
         $this->assertStringNotContainsString('hotlink.test', $res['html']);
         $this->assertStringNotContainsString('<figure', $res['html']);
         $this->assertStringContainsString('After', $res['html']);
-        $this->assertStringContainsString('data:image/gif', $res['html']);
+        $this->assertStringNotContainsString('data:image', $res['html']);
         $this->assertSame(
-            ['https://blog.moneyfrog.in/wp-content/uploads/2019/01/gone.jpg', 'https://hotlink.test/pic.png'],
+            ['https://blog.moneyfrog.in/wp-content/uploads/2019/01/gone.jpg', 'https://hotlink.test/pic.png', 'data:image/gif;base64,R0lGOD'],
             $res['failedImages']
         );
     }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
-import { mkdtemp, writeFile, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { downloadMedia } from '../src/media.mjs';
@@ -27,6 +27,7 @@ beforeEach(async () => {
     if (req.url === '/wp-content/uploads/2019/01/evil.svg') return res.writeHead(200, { 'content-type': 'image/svg+xml' }).end('<svg><script>alert(1)</script></svg>');
     if (req.url === '/wp-content/uploads/2019/01/good.svg') return res.writeHead(200, { 'content-type': 'image/svg+xml' }).end('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
     if (req.url === '/wp-content/uploads/2019/01/shell.php') return res.writeHead(200, { 'content-type': 'image/jpeg' }).end(JPG);
+    if (req.url === '/wp-content/uploads/2019/01/webp-named.jpeg') return res.writeHead(200, { 'content-type': 'image/webp' }).end(Buffer.from('RIFF1234WEBPVP8 '));
     res.writeHead(404).end();
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -102,16 +103,34 @@ describe('downloadMedia', () => {
     expect(seen.map((s) => s.url)).toEqual(['/wp-content/uploads/2019/01/away.jpg']);
   });
 
-  it('blocks other extensions and soft-404 or fake bodies, and unsafe svg', async () => {
+  it('blocks other extensions and soft-404 or fake bodies, and svg', async () => {
     const bundlePath = await makeBundle([m(1, 'shell.php'), m(2, 'soft.jpg'), m(3, 'fake.png'), m(4, 'evil.svg'), m(5, 'good.svg')]);
     const manifest = await downloadMedia(opts(bundlePath));
     expect(manifest[1]).toMatchObject({ ok: false, status: 'blocked-extension' });
     expect(manifest[2]).toMatchObject({ ok: false, status: 'bad-content' });
     expect(manifest[3]).toMatchObject({ ok: false, status: 'bad-content' });
-    expect(manifest[4]).toMatchObject({ ok: false, status: 'bad-content' });
-    expect(manifest[5]).toMatchObject({ ok: true });
+    expect(manifest[4]).toMatchObject({ ok: false, status: 'blocked-extension' });
+    expect(manifest[5]).toMatchObject({ ok: false, status: 'blocked-extension' });
+    expect(hits['/wp-content/uploads/2019/01/evil.svg']).toBeUndefined();
     expect(hits['/wp-content/uploads/2019/01/shell.php']).toBeUndefined();
     for (const f of ['soft.jpg', 'fake.png', 'evil.svg', 'shell.php']) await expect(stat(path.join(tmp, 'out/2019/01', f))).rejects.toThrow();
+  });
+
+  it('re-validates files already on disk: a corrupt cached file is fetched again, a still-bad one is bad-content', async () => {
+    const dir = path.join(tmp, 'out/2019/01');
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, 'ok.jpg'), '<html>cached soft 404</html>');
+    await writeFile(path.join(dir, 'soft.jpg'), '<html>cached soft 404</html>');
+    const bundlePath = await makeBundle([m(1, 'ok.jpg'), m(2, 'soft.jpg')]);
+    const manifest = await downloadMedia(opts(bundlePath));
+    expect(hits['/wp-content/uploads/2019/01/ok.jpg']).toBe(1);
+    expect(manifest[1]).toMatchObject({ ok: true, bytes: 8 });
+    expect(manifest[2]).toMatchObject({ ok: false, status: 'bad-content' });
+  });
+
+  it('accepts a real WebP saved under a .jpeg name', async () => {
+    const manifest = await downloadMedia(opts(await makeBundle([m(1, 'webp-named.jpeg')])));
+    expect(manifest[1]).toMatchObject({ ok: true });
   });
 
   it('defaults to the old blog host only', async () => {

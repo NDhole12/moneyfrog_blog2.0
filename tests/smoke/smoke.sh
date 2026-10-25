@@ -224,6 +224,7 @@ check_local import_slug_taken_and_per_item_errors import_slug_taken_and_per_item
 check_local import_bad_rerun_creates_nothing   import_bad_rerun_creates_nothing
 check_local import_content_is_allow_listed     import_content_is_allow_listed
 check_local import_requires_india_timezone     import_requires_india_timezone
+check_local import_setup_failure_aborts        import_setup_failure_aborts
 check_local import_post_fields                    import_post_fields
 check_local import_keeps_upload_path              import_keeps_upload_path
 check_local service_user_login_blocked            service_user_login_blocked
