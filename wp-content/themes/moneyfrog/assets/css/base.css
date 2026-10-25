@@ -23,14 +23,18 @@ body.is-locked { overflow: hidden; }
 
 .wrap { width: min(var(--wrap), 100% - 2 * var(--gutter)); margin-inline: auto; }
 .section { padding-block: var(--sec-pad); }
+main { font-size: var(--fs-body); line-height: 1.6; }
+main time, main .card__meta, .popular__n, .picks__n, .start-here__n, .topic-tile__count, .pagination { font-variant-numeric: tabular-nums; }
+/* Buttons inside the blog layer are compact; header and footer buttons are untouched. */
+main .btn { height: 40px; padding: 0 var(--sp-4); font-size: 13.5px; }
 
-.eyebrow { display: block; font: 500 10.5px/1.4 var(--mono); letter-spacing: .28em; text-transform: uppercase; color: var(--gold-ink); margin-bottom: 18px; }
+.eyebrow { display: block; font: 500 var(--fs-eyebrow)/1.4 var(--mono); letter-spacing: .24em; text-transform: uppercase; color: var(--gold-ink); margin-bottom: var(--sp-2); }
 .display, .h2, .h3 { font-family: var(--serif); font-weight: 400; color: var(--ink); letter-spacing: -.015em; }
-.display { font-size: clamp(42px, 4.9vw, 62.7px); line-height: 1.04; }
+.display { font-size: var(--fs-display); line-height: 1.1; }
 .display em { font-style: italic; color: var(--gold-ink); }
-.h2 { font-size: clamp(32px, 3.44vw, 44px); line-height: 1.03; max-width: 620px; }
-.h3 { font-size: 21px; line-height: 1.2; letter-spacing: -.01em; }
-.lead { font-size: 16.5px; line-height: 1.7; color: var(--ink-2); max-width: 600px; }
+.h2 { font-size: var(--fs-h2); line-height: 1.15; max-width: 620px; }
+.h3 { font-size: var(--fs-h3); line-height: 1.25; letter-spacing: -.01em; }
+.lead { font-size: var(--fs-body); line-height: 1.6; color: var(--ink-2); max-width: 600px; }
 .plain-list li + li { margin-top: 8px; }
 
 .btn {

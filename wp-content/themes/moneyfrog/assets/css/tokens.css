@@ -58,5 +58,25 @@
   --radius: 12px;
   --gold-grad: linear-gradient(160deg, #e2c46b 0%, #d4b24f 45%, #c29c35 100%);
   --shadow-card: 0 1px 2px rgba(40, 30, 10, .04), 0 28px 56px -30px rgba(70, 52, 18, .32);
-  --sec-pad: clamp(44px, 5.2vw, 72px);
+  --sec-pad: clamp(44px, 5.2vw, 72px); /* header/footer only */
+
+  /* Blog layer: density tokens (type scale, spacing, radii). Header and footer do not use these. */
+  --fs-body: 15px;          /* UI and listing text */
+  --fs-article: 16.5px;     /* single-post body */
+  --fs-small: 12px;         /* meta, dates, labels */
+  --fs-excerpt: 14px;       /* card and row excerpts */
+  --fs-eyebrow: 10.5px;     /* mono eyebrows */
+  --fs-card: 17px;          /* list and card titles */
+  --fs-pick: 15px;          /* editor's picks titles */
+  --fs-featured: 22px;      /* featured story title */
+  --fs-display: clamp(26px, 2.6vw, 34px);  /* archive H1 */
+  --fs-h1: clamp(26px, 3vw, 36px);         /* post H1 */
+  --fs-h2: clamp(20px, 2vw, 26px);         /* section headings */
+  --fs-h3: 18px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 40px;
+  --gap-section: 40px;
+  --card-pad: 14px;
+  --grid-gap: 16px;
+  --radius-card: 10px;
 }
+@media (max-width: 600px) { :root { --gap-section: 28px; } }

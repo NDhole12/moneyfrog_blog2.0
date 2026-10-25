@@ -16,9 +16,17 @@ get_header();
 <main id="main">
     <section class="cat-head band">
         <div class="wrap">
-            <span class="eyebrow">Search</span>
-            <h1 class="display">Results for &ldquo;<?php echo esc_html(get_search_query()); ?>&rdquo;</h1>
-            <p class="lead"><?php echo esc_html(sprintf('%d %s found.', $found, $found === 1 ? 'article' : 'articles')); ?></p>
+            <nav class="breadcrumb" aria-label="Breadcrumb">
+                <a href="<?php echo esc_url(home_url('/')); ?>">Insights</a>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">Search</span>
+            </nav>
+            <div class="cat-head__main">
+                <div class="cat-head__copy">
+                    <span class="eyebrow"><?php echo esc_html(sprintf('Search · %d %s', $found, $found === 1 ? 'article' : 'articles')); ?></span>
+                    <h1 class="display">Results for &ldquo;<?php echo esc_html(get_search_query()); ?>&rdquo;</h1>
+                </div>
+            </div>
         </div>
     </section>
     <div class="wrap search-layout">

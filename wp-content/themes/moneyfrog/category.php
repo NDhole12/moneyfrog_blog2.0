@@ -38,8 +38,25 @@ get_header();
                 <span aria-hidden="true">/</span>
                 <span aria-current="page"><?php echo esc_html($topic->name); ?></span>
             </nav>
-            <div class="cat-meta">
-                <span class="eyebrow"><?php echo esc_html(sprintf('Topic · %d %s', $count, $count === 1 ? 'article' : 'articles')); ?></span>
+            <div class="cat-head__main">
+                <div class="cat-head__copy">
+                    <span class="eyebrow"><?php echo esc_html(sprintf('Topic · %d %s', $count, $count === 1 ? 'article' : 'articles')); ?></span>
+                    <h1 class="display"><?php echo esc_html($topic->name); ?></h1>
+                    <p class="lead"><?php echo esc_html(mf_topic_blurb($topic)); ?></p>
+                </div>
+                <?php if ($site) : ?>
+                    <a class="btn btn--gold btn--sm cat-head__cta" href="<?php echo esc_url($site); ?>">Explore <?php echo esc_html($topic->name); ?> <?php echo mf_icon('i-arrow'); ?></a>
+                <?php endif; ?>
+            </div>
+            <div class="cat-tools">
+                <?php if ($subs) : ?>
+                <nav class="chips" aria-label="Sub-topics">
+                    <a class="chip<?php echo $tag === '' ? ' is-current' : ''; ?>" href="<?php echo $link(''); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in $link. ?>"<?php echo $tag === '' ? ' aria-current="page"' : ''; ?>>All</a>
+                    <?php foreach ($subs as $sub) : ?>
+                        <a class="chip<?php echo $tag === $sub->slug ? ' is-current' : ''; ?>" href="<?php echo $link($sub->slug); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in $link. ?>"<?php echo $tag === $sub->slug ? ' aria-current="page"' : ''; ?>><?php echo esc_html(mf_tag_label($sub->name, $sub->slug)); ?></a>
+                    <?php endforeach; ?>
+                </nav>
+                <?php endif; ?>
                 <form class="sort" method="get" action="<?php echo esc_url($base); ?>" data-autosubmit>
                     <?php if ($tag !== '') : ?><input type="hidden" name="tag" value="<?php echo esc_attr($tag); ?>"><?php endif; ?>
                     <label for="sort">Sort</label>
@@ -49,25 +66,6 @@ get_header();
                     </select>
                     <noscript><button type="submit" class="btn btn--outline btn--sm">Apply</button></noscript>
                 </form>
-            </div>
-            <div class="cat-head__main">
-                <div class="cat-head__copy">
-                    <h1 class="display"><?php echo esc_html($topic->name); ?></h1>
-                    <p class="lead"><?php echo esc_html(mf_topic_blurb($topic)); ?></p>
-                </div>
-                <?php if ($site) : ?>
-                    <a class="btn btn--gold" href="<?php echo esc_url($site); ?>">Explore <?php echo esc_html($topic->name); ?> <?php echo mf_icon('i-arrow'); ?></a>
-                <?php endif; ?>
-            </div>
-            <div class="cat-tools">
-                <?php if ($subs) : ?>
-                <nav class="chips" aria-label="Sub-topics">
-                    <a class="chip<?php echo $tag === '' ? ' is-current' : ''; ?>" href="<?php echo $link(''); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in $link. ?>"<?php echo $tag === '' ? ' aria-current="page"' : ''; ?>>All</a>
-                    <?php foreach ($subs as $sub) : ?>
-                        <a class="chip<?php echo $tag === $sub->slug ? ' is-current' : ''; ?>" href="<?php echo $link($sub->slug); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in $link. ?>"<?php echo $tag === $sub->slug ? ' aria-current="page"' : ''; ?>><?php echo esc_html(mf_tag_label($sub)); ?></a>
-                    <?php endforeach; ?>
-                </nav>
-                <?php endif; ?>
             </div>
         </div>
     </section>

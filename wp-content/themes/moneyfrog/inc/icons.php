@@ -74,3 +74,16 @@ function mf_icons_sprite(): void
 </svg>
     <?php
 }
+
+/** Sprite icon for a topic tile. */
+function mf_topic_icon(string $slug): string
+{
+    return [
+        'market-outlook'     => 'i-chart',
+        'mutual-funds'       => 'i-pie',
+        'tax'                => 'i-receipt',
+        'insurance'          => 'i-umbrella',
+        'retirement'         => 'i-target',
+        'financial-planning' => 'i-layers',
+    ][$slug] ?? 'i-doc';
+}

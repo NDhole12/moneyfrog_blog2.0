@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 }
 
 const MF_CATEGORY_PER_PAGE = 10;
-const MF_HOME_LATEST_PER_PAGE = 6;
+const MF_HOME_LATEST_PER_PAGE = 8;
 /** Tags that drive layout (picks, popular, pinned) and so are not shown as sub-topics. */
 const MF_UTILITY_TAGS = ['popular', 'editors-pick', 'start-here'];
 
@@ -117,7 +117,7 @@ function mf_row_label(WP_Post $post, string $topicName): string
     if (is_array($tags)) {
         foreach ($tags as $tag) {
             if (!in_array($tag->slug, MF_UTILITY_TAGS, true)) {
-                return mf_tag_label($tag);
+                return mf_tag_label($tag->name, $tag->slug);
             }
         }
     }
@@ -213,23 +213,14 @@ function mf_pinned_post(WP_Term $topic): ?WP_Post
     return $cache[$topic->term_id];
 }
 
-/**
- * Display name of a tag. Imported tags often carry their slug as the name
- * ("equity-market-panic"); those read as "Equity market panic". Real names pass through.
- */
-function mf_tag_label(WP_Term $tag): string
-{
-    $name = trim($tag->name);
-    if ($name !== '' && $name === $tag->slug) {
-        $name = str_replace('-', ' ', $name);
-        return mb_strtoupper(mb_substr($name, 0, 1)) . mb_substr($name, 1);
-    }
-    return $name;
-}
+/** Sub-topic pills need at least this many posts in the topic. */
+const MF_SUBTOPIC_MIN_POSTS = 3;
 
 /**
- * Sub-topic pills: up to $limit non-utility tags, ranked by how many posts of THIS topic
- * carry them (not the global tag count). Ties break alphabetically by slug.
+ * Sub-topic pills: up to $limit non-utility tags used by at least MF_SUBTOPIC_MIN_POSTS posts
+ * of THIS topic, ranked by in-topic use (not the global tag count; ties by slug). A tag that
+ * is the topic itself ("mutual-funds" on Mutual Funds) is skipped. Fewer than two pills
+ * means no row at all, so an empty array is returned.
  */
 function mf_subtopics(WP_Term $topic, int $limit = 8): array
 {
@@ -244,17 +235,20 @@ function mf_subtopics(WP_Term $topic, int $limit = 8): array
     if (is_wp_error($rows)) {
         return [];
     }
+    $self  = [$topic->slug, sanitize_title($topic->name)];
     $uses  = [];
     $terms = [];
     foreach ($rows as $t) {
-        if (in_array($t->slug, MF_UTILITY_TAGS, true)) {
+        if (in_array($t->slug, MF_UTILITY_TAGS, true) || in_array($t->slug, $self, true)) {
             continue;
         }
         $uses[$t->term_id]  = ($uses[$t->term_id] ?? 0) + 1;
         $terms[$t->term_id] = $t;
     }
+    $terms = array_filter($terms, static fn (WP_Term $t): bool => $uses[$t->term_id] >= MF_SUBTOPIC_MIN_POSTS);
     uasort($terms, static fn (WP_Term $x, WP_Term $y): int => [$uses[$y->term_id], $x->slug] <=> [$uses[$x->term_id], $y->slug]);
-    return array_slice(array_values($terms), 0, $limit);
+    $terms = array_slice(array_values($terms), 0, $limit);
+    return count($terms) >= 2 ? $terms : [];
 }
 
 /** Sort direction requested on a category page: only `asc` is honoured, anything else is newest first. */

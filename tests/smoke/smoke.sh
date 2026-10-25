@@ -217,14 +217,25 @@ category_page() {
   curl -s --max-time 20 "$BASE/category/mutual-funds/?order=asc" | grep -q 'class="pagination"'
 }
 category_tag_pills_use_names() {
-  local h pills n
-  h="$(curl -s --max-time 20 "$BASE/category/market-outlook/" | tr '
-' ' ')"
-  pills="$(grep -o '<nav class="chips" aria-label="Sub-topics">.*</nav>' <<<"$h" | sed 's#</nav>.*#</nav>#' | grep -o '<a [^>]*>[^<]*</a>' | sed 's#<[^>]*>##g')"
-  n="$(grep -c . <<<"$pills")"
-  [ "$n" -ge 2 ] && [ "$n" -le 9 ] || return 1
-  grep -qx 'All' <<<"$pills" || return 1
-  ! grep -qE '^[a-z0-9]+(-[a-z0-9]+)+$' <<<"$pills"
+  local topic h pills n href slug seen=0
+  for topic in market-outlook mutual-funds tax insurance retirement financial-planning guides; do
+    h="$(curl -s --max-time 20 "$BASE/category/$topic/" | tr '\n' ' ')"
+    pills="$(grep -o '<nav class="chips" aria-label="Sub-topics">.*' <<<"$h" | sed 's#</nav>.*#</nav>#' | grep -o '<a [^>]*>[^<]*</a>' || true)"
+    if [ -z "$pills" ]; then continue; fi                       # fewer than 2 qualifying tags: no row at all
+    seen=$((seen + 1))
+    n="$(grep -c . <<<"$pills")"
+    [ "$n" -ge 3 ] && [ "$n" -le 9 ] || return 1                 # All + 2..8 tags
+    sed 's#<[^>]*>##g' <<<"$pills" | head -n1 | grep -qx 'All' || return 1
+    ! sed 's#<[^>]*>##g' <<<"$pills" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)+$' || return 1   # no raw slugs
+    ! sed 's#<[^>]*>##g' <<<"$pills" | grep -qix "$(echo "$topic" | tr - ' ')" || return 1     # no pill for the topic itself
+    if is_local; then                                            # every tag is used by at least 3 posts of the topic
+      while read -r href; do
+        slug="${href##*tag=}"; slug="${slug%%&*}"
+        [ "$(wp post list --post_type=post --post_status=publish --category_name="$topic" --tag="$slug" --format=count </dev/null 2>/dev/null)" -ge 3 ] || return 1
+      done < <(grep -o 'href="[^"]*?tag=[^"&]*' <<<"$pills" | sed 's/href="//')
+    fi
+  done
+  [ "$seen" -ge 1 ] || ! is_local
 }
 search_works() {
   local h

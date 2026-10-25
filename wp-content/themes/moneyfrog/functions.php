@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) {
 
 require_once get_template_directory() . '/inc/icons.php';
 require_once get_template_directory() . '/inc/gtm.php';
+require_once get_template_directory() . '/inc/tag-label.php';
 require_once get_template_directory() . '/inc/queries.php';
 require_once get_template_directory() . '/inc/single.php';
 require_once get_template_directory() . '/inc/seo.php';

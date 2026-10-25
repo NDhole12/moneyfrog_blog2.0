@@ -1,5 +1,5 @@
 <?php
-/** Blog home: hero + picks, topics, Market Outlook band, latest, start-here guides, advisor CTA. */
+/** Blog home: featured story + picks, topics, Market Outlook band, latest, start-here guides, advisor CTA. */
 
 use MoneyfrogCore\Config;
 
@@ -15,11 +15,10 @@ get_header();
 ?>
 <main id="main">
 <?php if ($paged === 1) : ?>
-    <section class="home-hero">
+    <h1 class="sr-only">Moneyfrog Insights</h1>
+    <section class="home-top">
         <div class="wrap">
-            <span class="eyebrow">Moneyfrog Insights</span>
-            <h1 class="display home-hero__title">Clear thinking on <em>money</em>, markets and the plan behind them.</h1>
-            <div class="home-hero__grid">
+            <div class="home-top__grid">
                 <?php if ($featured) : ?>
                     <?php get_template_part('template-parts/card', null, ['post' => $featured, 'layout' => 'featured']); ?>
                 <?php endif; ?>
@@ -28,18 +27,27 @@ get_header();
                     <h2 class="side-heading">Editor&rsquo;s picks</h2>
                     <ol class="picks__list">
                         <?php foreach ($s['picks'] as $i => $p) : ?>
-                            <?php $topic = mf_post_topic($p); ?>
-                            <li>
+                            <?php
+                            $topic   = mf_post_topic($p);
+                            $tname   = $topic ? $topic->name : 'Insights';
+                            $imageId = mf_card_image_id($p->ID);
+                            ?>
+                            <li class="picks__item">
                                 <span class="picks__n"><?php echo esc_html(sprintf('%02d', $i + 1)); ?></span>
-                                <div>
-                                    <p class="card__eyebrow"><?php echo esc_html($topic ? $topic->name : 'Insights'); ?></p>
-                                    <h3 class="picks__title"><a href="<?php echo esc_url(get_permalink($p)); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
-                                    <p class="card__meta"><time datetime="<?php echo esc_attr(get_the_date('c', $p)); ?>"><?php echo esc_html(get_the_date('j M Y', $p)); ?></time></p>
+                                <div class="picks__thumb<?php echo $imageId > 0 ? '' : ' picks__thumb--cover picks__thumb--' . ($p->ID % 2 === 0 ? 'cream' : 'night'); ?>" aria-hidden="true">
+                                    <?php if ($imageId > 0) : ?>
+                                        <?php echo wp_get_attachment_image($imageId, 'thumbnail', false, ['loading' => 'lazy', 'decoding' => 'async', 'alt' => '']); // phpcs:ignore WordPress.Security.EscapeOutput -- core-generated <img>. ?>
+                                    <?php else : ?>
+                                        <span><?php echo esc_html(mb_strtoupper(mb_substr($tname, 0, 1))); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="picks__text">
+                                    <p class="card__eyebrow"><?php echo esc_html($tname); ?></p>
+                                    <h3 class="picks__title"><a class="card__link" href="<?php echo esc_url(get_permalink($p)); ?>"><?php echo esc_html(get_the_title($p)); ?></a></h3>
                                 </div>
                             </li>
                         <?php endforeach; ?>
                     </ol>
-                    <a class="text-link" href="#latest">All articles <?php echo mf_icon('i-arrow'); ?></a>
                 </div>
                 <?php endif; ?>
             </div>
@@ -48,12 +56,18 @@ get_header();
 
     <section class="home-topics">
         <div class="wrap">
-            <h2 class="h3 home-topics__title">Browse by topic</h2>
+            <h2 class="h2 home-topics__title">Browse by topic</h2>
             <div class="topic-tiles">
                 <?php foreach ($tiles as $slug => $name) : ?>
+                    <?php
+                    $term  = get_category_by_slug($slug);
+                    $total = $term instanceof WP_Term ? (int) $term->count : 0;
+                    ?>
                     <a class="topic-tile" href="<?php echo esc_url(home_url('/category/' . $slug . '/')); ?>">
+                        <span class="topic-tile__icon" aria-hidden="true"><?php echo mf_icon(mf_topic_icon($slug)); ?></span>
                         <span class="topic-tile__name"><?php echo esc_html($name); ?></span>
                         <span class="topic-tile__blurb"><?php echo esc_html(Config::TOPIC_BLURBS[$slug] ?? ''); ?></span>
+                        <span class="topic-tile__count"><?php echo esc_html(sprintf('%d %s', $total, $total === 1 ? 'article' : 'articles')); ?></span>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -83,7 +97,7 @@ get_header();
 
     <section class="home-latest" id="latest">
         <div class="wrap">
-            <h2 class="h2">Latest articles</h2>
+            <h2 class="h2 home-latest__title">Latest articles</h2>
             <?php if ($s['latest']->have_posts()) : ?>
                 <div class="card-grid card-grid--3">
                     <?php foreach ($s['latest']->posts as $p) : ?>
