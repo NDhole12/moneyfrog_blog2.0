@@ -26,3 +26,7 @@ vendor/
 *.log
 .DS_Store
 Thumbs.db
+
+# Composer-managed plugins and PHP deps (installed, not committed)
+wp-content/plugins/
+.phpunit.result.cache

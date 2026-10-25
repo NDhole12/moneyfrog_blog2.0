@@ -1,0 +1,59 @@
+# Local development stack: WordPress on PHP 8.3 + MariaDB. Site: http://localhost:8080
+name: moneyfrog-blog
+
+x-wp-env: &wp-env
+  WORDPRESS_DB_HOST: db
+  WORDPRESS_DB_NAME: ${DB_NAME:-wordpress}
+  WORDPRESS_DB_USER: ${DB_USER:-wordpress}
+  WORDPRESS_DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  # Extra wp-config.php PHP (DISALLOW_FILE_EDIT etc.), supplied from .env
+  WORDPRESS_CONFIG_EXTRA: ${WORDPRESS_CONFIG_EXTRA:-}
+
+x-wp-volumes: &wp-volumes
+  - wp_core:/var/www/html
+  - ./wp-content/mu-plugins:/var/www/html/wp-content/mu-plugins
+  - ./wp-content/plugins:/var/www/html/wp-content/plugins
+  - ./wp-content/themes/moneyfrog:/var/www/html/wp-content/themes/moneyfrog
+  - ./migration:/migration
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-wordpress}
+      MARIADB_USER: ${DB_USER:-wordpress}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  wordpress:
+    image: wordpress:php8.3-apache
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment: *wp-env
+    volumes: *wp-volumes
+
+  wpcli:
+    image: wordpress:cli-php8.3
+    profiles: ["tools"]
+    user: "33:33"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *wp-env
+    volumes: *wp-volumes
+
+volumes:
+  db_data:
+  wp_core:

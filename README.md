@@ -11,3 +11,18 @@ Rule: the old blog is never touched. Content and images are only imported from i
 
 Status: design approved 2026-10-25; build starting. Server details live in `docs/private/`
 (git-ignored).
+
+## Local development
+
+```bash
+cp .env.example .env            # fill in the placeholder passwords
+composer install && (cd migration && npm install)
+docker compose up -d            # http://localhost:8080
+docker compose run --rm wpcli wp core install --url=http://localhost:8080 \
+  --title="Moneyfrog Insights" --admin_user=mf_codespark_qa \
+  --admin_email=qa@code-spark.com --skip-email
+docker compose run --rm wpcli wp rewrite structure '/%postname%/' --hard
+```
+
+Tests: `composer test` (PHPUnit), `npm test` in `migration/` (vitest),
+`tests/smoke/smoke.sh http://localhost:8080` (live checks).
