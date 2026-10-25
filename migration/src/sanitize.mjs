@@ -8,8 +8,9 @@ const YOUTUBE_HOSTS = ['www.youtube.com', 'youtube.com', 'www.youtube-nocookie.c
 const SCRIPT_LIKE = new Set(['script', 'style', 'object', 'embed', 'noscript', 'applet', 'template']);
 const ALLOWED_TAGS = sanitizeHtml.defaults.allowedTags.concat(['img', 'iframe', 'figure', 'figcaption', 'span', 'h1', 'h2']);
 const ALLOWED_TAG_SET = new Set(ALLOWED_TAGS);
-const JUDGED_BLOCKS = 'p,li,div,td,th,h1,h2,h3,h4,h5,h6,blockquote,dd,dt,figcaption';
-const ANY_BLOCK = `${JUDGED_BLOCKS},ul,ol,table,thead,tbody,tfoot,tr,dl,section,article,aside,header,footer,nav,figure,pre,form,details,summary,main`;
+const BLOCK_SELECTOR = 'p,li,div,td,th,h1,h2,h3,h4,h5,h6,blockquote,dd,dt,figcaption';
+const ANY_BLOCK = `${BLOCK_SELECTOR},ul,ol,table,thead,tbody,tfoot,tr,dl,section,article,aside,header,footer,nav,figure,pre,form,details,summary,main`;
+const BLOCK_TAGS = new Set(ANY_BLOCK.split(','));
 const WHITE = new Set(['white', '#fff', '#ffffff', 'rgb(255,255,255)']);
 
 const excerpt = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 120);
@@ -96,6 +97,7 @@ export function sanitize(html, { allow = ALLOWLIST } = {}) {
   const $ = cheerio.load(String(html ?? ''), null, false);
   const root = $.root()[0];
   const live = (el) => attached(el, root);
+  const colourFlags = [];
 
   // 0. Protocol-relative URLs -> https so allowed ones survive the final pass.
   $('a[href], iframe[src], img[src]').each((_, el) => {
@@ -116,7 +118,7 @@ export function sanitize(html, { allow = ALLOWLIST } = {}) {
       removed.push({ kind: 'hidden', detail: `${el.tagName}: ${excerpt(text)}` });
       $(el).remove();
     } else if (whiteTextNoBackground(d) && text.trim() !== '') {
-      flags.push({ kind: 'hidden-colour', excerpt: excerpt(text) });
+      colourFlags.push({ el, flag: { kind: 'hidden-colour', excerpt: excerpt(text) } });
     }
   });
 
@@ -157,41 +159,63 @@ export function sanitize(html, { allow = ALLOWLIST } = {}) {
     }
   });
 
-  // 5. Judge every leaf text block (innermost block wins).
+  // 5. Judge every inline run: the consecutive non-block children of the root and of each
+  //    block-like container. A leaf block is a single run; a mixed block's own text is judged
+  //    separately from its block children, and only the run's nodes are removed.
+  const isBlock = (n) => n.type === 'tag' && (BLOCK_TAGS.has(n.tagName) || $(n).find(ANY_BLOCK).length > 0);
+  const containers = [root, ...$('*').toArray().filter((n) => isBlock(n))];
   const judged = [];
-  const blocks = $(JUDGED_BLOCKS).toArray().concat($.root().children('span').toArray());
-  for (const el of blocks) {
-    if (!live(el) || $(el).find(ANY_BLOCK).length > 0) continue;
-    const text = $(el).text();
-    if (text.trim() === '') continue;
-    const german = germanSignal(text);
-    const keyword = GAMBLING.test(text);
-    const badLink = $(el)
-      .find('a[href]')
-      .toArray()
-      .some((a) => classifyHref(a.attribs.href, allow) === 'outbound');
-    // R26: (gambling AND off-list link AND german) OR (german AND off-list link) reduces to german AND off-list link.
-    if (german && badLink) {
-      removed.push({ kind: 'paragraph', detail: excerpt(text) });
-      $(el).remove();
-      continue;
+  for (const container of containers) {
+    if (container !== root && !live(container)) continue;
+    const runs = [];
+    let current = [];
+    for (const child of container.children ?? []) {
+      if (isBlock(child)) {
+        if (current.length) runs.push(current);
+        current = [];
+      } else {
+        current.push(child);
+      }
     }
-    const mine = [];
-    if (german) mine.push({ kind: 'non-english', excerpt: excerpt(text) });
-    if (keyword) mine.push({ kind: 'keyword', excerpt: excerpt(text) });
-    if (mine.length) judged.push({ el, flags: mine });
+    if (current.length) runs.push(current);
+    for (const nodes of runs) {
+      const text = nodes.map((n) => $(n).text()).join('');
+      if (text.trim() === '') continue;
+      const german = germanSignal(text);
+      const keyword = GAMBLING.test(text);
+      const badLink = nodes.some((n) =>
+        $(n)
+          .find('a[href]')
+          .addBack('a[href]')
+          .toArray()
+          .some((a) => classifyHref(a.attribs.href, allow) === 'outbound'),
+      );
+      // R26: (gambling AND off-list link AND german) OR (german AND off-list link) reduces to german AND off-list link.
+      if (german && badLink) {
+        removed.push({ kind: 'paragraph', detail: excerpt(text) });
+        for (const n of nodes) $(n).remove();
+        continue;
+      }
+      const mine = [];
+      if (german) mine.push({ kind: 'non-english', excerpt: excerpt(text) });
+      if (keyword) mine.push({ kind: 'keyword', excerpt: excerpt(text) });
+      if (mine.length) judged.push({ nodes, text, flags: mine });
+    }
   }
 
-  // 6. R25 contagion: spam found in this item taints its other non-English blocks.
+  // 6. R25 contagion: spam found in this item taints its other non-English runs.
   const spamFound = removed.some((r) => r.kind === 'paragraph');
   for (const j of judged) {
-    if (spamFound && live(j.el) && j.flags.some((f) => f.kind === 'non-english')) {
-      removed.push({ kind: 'paragraph', detail: `contagion: ${excerpt($(j.el).text())}` });
-      $(j.el).remove();
+    if (spamFound && live(j.nodes[0]) && j.flags.some((f) => f.kind === 'non-english')) {
+      removed.push({ kind: 'paragraph', detail: `contagion: ${excerpt(j.text)}` });
+      for (const n of j.nodes) $(n).remove();
     } else {
       flags.push(...j.flags);
     }
   }
+
+  // Colour flags only survive if their element is still in the document.
+  for (const c of colourFlags) if (live(c.el)) flags.push(c.flag);
 
   // 7. Links: unsafe schemes and off-list hosts are unwrapped (text kept) and logged.
   $('a[href]').each((_, el) => {
