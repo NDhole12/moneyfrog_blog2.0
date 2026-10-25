@@ -227,6 +227,13 @@ admin_branded() {
     $ok = $ok && apply_filters("get_user_option_admin_color", "midnight", "admin_color", null) === "midnight" && apply_filters("get_user_option_admin_color", "modern", "admin_color", null) === "moneyfrog";
     echo $ok ? "ADMIN_BRANDED_OK" : "ADMIN_BRANDED_FAIL";' </dev/null 2>/dev/null | grep -q ADMIN_BRANDED_OK
 }
+favicon_is_moneyfrog() {
+  local h; h="$(home_html)"
+  grep -q '<link rel="icon" type="image/svg+xml" href="[^"]*favicon-frog.svg' <<<"$h" || return 1
+  grep -q '<link rel="icon" type="image/png"[^>]*favicon.png' <<<"$h" || return 1
+  grep -q '<link rel="apple-touch-icon"[^>]*favicon.png' <<<"$h" || return 1
+  ! grep -q 'wp-includes/images/w-logo' <<<"$h" && [ "$(grep -o 'rel="icon"' <<<"$h" | wc -l | tr -d ' ')" = 2 ]
+}
 login_branded() {
   local h; h="$(curl -s --max-time 20 "$BASE/wp-login.php")"
   grep -q 'assets/css/login.css' <<<"$h" && grep -q 'moneyfrog-logo.svg' <<<"$h" || return 1
@@ -484,6 +491,7 @@ check_local cover_for_no_image cover_for_no_image
 check_local category_page      category_page
 check_local search_works       search_works
 check_local login_branded      login_branded
+check       favicon_is_moneyfrog favicon_is_moneyfrog
 check_local admin_branded      admin_branded
 check       category_tag_pills_use_names category_tag_pills_use_names
 check       newsletter_hidden  newsletter_hidden

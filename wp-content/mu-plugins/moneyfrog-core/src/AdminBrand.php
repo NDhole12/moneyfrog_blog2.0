@@ -32,7 +32,14 @@ final class AdminBrand
         add_action('wp_enqueue_scripts', [self::class, 'enqueueBarStyle']);
         add_action('admin_head', [self::class, 'printFavicon']);
         add_action('login_head', [self::class, 'printFavicon']);
-        add_action('wp_head', [self::class, 'printFrontFavicon'], 2);
+        add_action('wp_head', [self::class, 'printFavicon'], 2);
+        // Core must never print or serve its own icon: drop wp_site_icon() and point the Site Icon fallback at ours.
+        remove_action('wp_head', 'wp_site_icon', 99);
+        foreach (['admin_head', 'login_head'] as $hook) {
+            remove_action($hook, 'wp_site_icon');
+            remove_action($hook, 'wp_site_icon', 99);
+        }
+        add_filter('get_site_icon_url', [self::class, 'siteIconUrl']);
     }
 
     private static function assetUrl(string $file): string
@@ -136,16 +143,19 @@ final class AdminBrand
         wp_enqueue_style('mf-admin-bar', self::assetUrl('admin-bar.css'), [], self::assetVersion('admin-bar.css'));
     }
 
-    public static function printFavicon(): void
+    public static function siteIconUrl(): string
     {
-        printf('<link rel="icon" type="image/svg+xml" href="%s">' . "\n", esc_url(self::assetUrl('favicon-frog.svg')));
+        return self::assetUrl('favicon.png');
     }
 
-    /** Front end: only when no site icon is set in the Customizer. */
-    public static function printFrontFavicon(): void
+    public static function printFavicon(): void
     {
-        if (!has_site_icon()) {
-            self::printFavicon();
-        }
+        $png = esc_url(self::assetUrl('favicon.png'));
+        printf('<link rel="icon" type="image/svg+xml" href="%s">' . "
+", esc_url(self::assetUrl('favicon-frog.svg')));
+        printf('<link rel="icon" type="image/png" sizes="48x48" href="%s">' . "
+", $png);
+        printf('<link rel="apple-touch-icon" sizes="48x48" href="%s">' . "
+", $png);
     }
 }
