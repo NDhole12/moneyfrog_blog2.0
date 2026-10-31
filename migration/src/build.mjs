@@ -4,7 +4,7 @@ import path from 'node:path';
 import * as cheerio from 'cheerio';
 import { sanitize } from './sanitize.mjs';
 import { buildPlan } from './review.mjs';
-import { slugify, cleanSlug, isSchoolPage, normalisePath, consolidateByline } from './slugs.mjs';
+import { slugify, cleanSlug, isSchoolPage, normalisePath, consolidateByline, BYLINE_ROLES } from './slugs.mjs';
 import { renderRedirectsPhp, renderInventory, renderReport } from './render.mjs';
 
 export { renderRedirectsPhp, renderInventory, renderReport };
@@ -56,7 +56,7 @@ function buildBylines(users, items) {
   for (const u of users) {
     const name = plain(u.name);
     const slug = slugify(name);
-    if (used.has(slug)) bySlug.set(slug, { slug, name, bio: plain(u.description), role: '' });
+    if (used.has(slug)) bySlug.set(slug, { slug, name, bio: plain(u.description), role: BYLINE_ROLES[slug] ?? '' });
   }
   return [...bySlug.values()].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
 }

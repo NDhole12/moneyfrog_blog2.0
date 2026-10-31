@@ -90,11 +90,11 @@ describe('bundle', () => {
     expect(ex).toMatch(/word…?$/);
   });
 
-  it('bylines: only the two founders, slug from name, plain-text bio, empty role', () => {
+  it('bylines: only the two founders, slug from name, plain-text bio, title as on the About page', () => {
     const { bundle } = buildBundle(raw());
     expect(bundle.bylines).toEqual([
-      { slug: 'manoj-chahar', name: 'Manoj Chahar', bio: 'Founder.', role: '' },
-      { slug: 'mushtaq-kazi', name: 'Mushtaq Kazi', bio: '', role: '' },
+      { slug: 'manoj-chahar', name: 'Manoj Chahar', bio: 'Founder.', role: 'Founder & CEO' },
+      { slug: 'mushtaq-kazi', name: 'Mushtaq Kazi', bio: '', role: 'Co-Founder, CTO & COO' },
     ]);
     expect(bundle.items.find((i) => i.oldId === 3).byline).toBe('manoj-chahar');
     expect(bundle.items.every((i) => ['manoj-chahar', 'mushtaq-kazi'].includes(i.byline))).toBe(true);

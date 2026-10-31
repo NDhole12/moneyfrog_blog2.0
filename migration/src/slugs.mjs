@@ -90,6 +90,9 @@ export function buildCategoryMap(categories) {
 const KEPT_BYLINES = new Set(['manoj-chahar', 'mushtaq-kazi']);
 const DEFAULT_BYLINE = 'mushtaq-kazi';
 
+/** Titles exactly as on https://moneyfrog.in/about-us; shown with the name under every article. */
+export const BYLINE_ROLES = { 'manoj-chahar': 'Founder & CEO', 'mushtaq-kazi': 'Co-Founder, CTO & COO' };
+
 /** The byline an old author's articles are published under on the new site. */
 export const consolidateByline = (slug) => (KEPT_BYLINES.has(slug) ? slug : DEFAULT_BYLINE);
 
