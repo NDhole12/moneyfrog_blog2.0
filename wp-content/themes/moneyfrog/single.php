@@ -47,7 +47,7 @@ while (have_posts()) :
             <div class="post-head__meta">
                 <div class="byline">
                     <?php if ($by) : ?>
-                        <span class="avatar" aria-hidden="true"><?php echo esc_html(Byline::initials($by->name)); ?></span>
+                        <?php echo mf_byline_avatar($by); // phpcs:ignore WordPress.Security.EscapeOutput -- core <img> or escaped initials. ?>
                     <?php endif; ?>
                     <p class="byline__text">
                         <?php if ($by) : ?>

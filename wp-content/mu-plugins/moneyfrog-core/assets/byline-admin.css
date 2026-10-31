@@ -1,0 +1,7 @@
+/* Posts → Authors. The core description is unused: the bio lives in the "Short bio" field. */
+.term-description-wrap { display: none; }
+.mf-photo-field__preview img { display: block; width: 96px; height: 96px; margin-bottom: 8px; border-radius: 50%; object-fit: cover; }
+.mf-photo-field__remove { display: none; margin-left: 8px; color: #b32d2e; }
+.mf-photo-field.has-photo .mf-photo-field__remove { display: inline; }
+.column-mf_photo { width: 56px; }
+.mf-photo-thumb { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }

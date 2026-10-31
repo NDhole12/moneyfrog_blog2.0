@@ -26,7 +26,13 @@ function mf_post_jsonld(WP_Post $post): array
     $by      = Byline::forPost($post->ID);
     $logo    = get_template_directory_uri() . '/assets/img/moneyfrog-logo.svg';
     $author  = $by
-        ? ['@type' => 'Person', 'name' => $by->name]
+        ? array_filter([
+            '@type'    => 'Person',
+            'name'     => $by->name,
+            'jobTitle' => trim((string) get_term_meta($by->term_id, 'mf_role', true)),
+            'url'      => is_wp_error(get_term_link($by)) ? '' : get_term_link($by),
+            'image'    => mf_byline_photo_url($by),
+        ], static fn ($v) => $v !== '')
         : ['@type' => 'Organization', 'name' => 'Moneyfrog'];
     $data = [
         '@context'         => 'https://schema.org',

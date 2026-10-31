@@ -44,12 +44,12 @@ final class AdminBrand
         add_filter('get_site_icon_url', [self::class, 'siteIconUrl']);
     }
 
-    private static function assetUrl(string $file): string
+    public static function assetUrl(string $file): string
     {
         return plugins_url('moneyfrog-core/assets/' . $file, dirname(__DIR__, 2) . '/moneyfrog-core.php');
     }
 
-    private static function assetVersion(string $file): string
+    public static function assetVersion(string $file): string
     {
         $path = dirname(__DIR__) . '/assets/' . $file;
         return is_file($path) ? (string) filemtime($path) : '1';

@@ -10,6 +10,10 @@ final class Byline
 {
     public const TAXONOMY = 'mf_byline';
     public const CORE_AUTHOR_BASE = 'wp-user';
+    /** Term meta: attachment id of the author's photo. */
+    public const PHOTO_META = 'mf_photo';
+    /** Every published article shows an author; one saved without a byline is published as Mushtaq Kazi. */
+    public const DEFAULT_SLUG = 'mushtaq-kazi';
     private const REWRITE_VERSION = '1';
     private const REWRITE_OPTION = 'mf_byline_rewrite_version';
 
@@ -19,6 +23,8 @@ final class Byline
         add_action('init', [self::class, 'registerTaxonomy'], 5);
         add_action('init', [self::class, 'maybeFlushRewrite'], 99);
         add_action('template_redirect', [self::class, 'blockCoreAuthorArchives'], 0);
+        // Runs after the editor has saved the post's terms, so a byline picked in the editor is already set.
+        add_action('wp_after_insert_post', [self::class, 'ensureByline'], 10, 2);
     }
 
     /** Frees /author/ for bylines; core user archives live under /wp-user/. */
@@ -33,7 +39,14 @@ final class Byline
     public static function registerTaxonomy(): void
     {
         register_taxonomy(self::TAXONOMY, ['post'], [
-            'labels' => ['name' => 'Bylines', 'singular_name' => 'Byline'],
+            'labels' => [
+                'name' => 'Authors', 'singular_name' => 'Author', 'menu_name' => 'Authors',
+                'all_items' => 'All authors', 'edit_item' => 'Edit author', 'view_item' => 'View author',
+                'update_item' => 'Update author', 'add_new_item' => 'Add new author', 'new_item_name' => 'New author name',
+                'search_items' => 'Search authors', 'not_found' => 'No authors found.',
+                'separate_items_with_commas' => 'One author per article.', 'choose_from_most_used' => 'Choose an author',
+                'back_to_items' => '← Back to authors',
+            ],
             'public' => true,
             'hierarchical' => false,
             'show_ui' => true,
@@ -51,6 +64,45 @@ final class Byline
                 'sanitize_callback' => 'sanitize_text_field',
                 'auth_callback' => static fn () => current_user_can('manage_categories'),
             ]);
+        }
+        register_term_meta(self::TAXONOMY, self::PHOTO_META, [
+            'type' => 'integer',
+            'single' => true,
+            'show_in_rest' => true,
+            'sanitize_callback' => [self::class, 'sanitizePhotoId'],
+            'auth_callback' => static fn () => current_user_can('manage_categories'),
+        ]);
+    }
+
+    /** Positive whole number or 0. */
+    public static function sanitizePhotoId(mixed $value): int
+    {
+        if (is_int($value)) {
+            return max(0, $value);
+        }
+        return is_string($value) && preg_match('/^[1-9][0-9]{0,18}$/', $value) === 1 ? (int) $value : 0;
+    }
+
+    /** The author's photo (an image attachment), or 0 when none is set or it was deleted. */
+    public static function photoId(\WP_Term $by): int
+    {
+        $id = self::sanitizePhotoId(get_term_meta($by->term_id, self::PHOTO_META, true));
+        return $id > 0 && wp_attachment_is_image($id) ? $id : 0;
+    }
+
+    public static function needsDefault(string $postType, string $status, bool $hasByline): bool
+    {
+        return $postType === 'post' && in_array($status, ['publish', 'future'], true) && !$hasByline;
+    }
+
+    public static function ensureByline(int $postId, \WP_Post $post): void
+    {
+        if (!self::needsDefault($post->post_type, $post->post_status, self::forPost($postId) !== null)) {
+            return;
+        }
+        $default = get_term_by('slug', self::DEFAULT_SLUG, self::TAXONOMY);
+        if ($default instanceof \WP_Term) {
+            wp_set_object_terms($postId, [(int) $default->term_id], self::TAXONOMY);
         }
     }
 

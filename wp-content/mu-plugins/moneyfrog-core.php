@@ -41,6 +41,7 @@ if (defined('WP_CLI') && WP_CLI) {
 \MoneyfrogCore\CommentsOff::register();
 \MoneyfrogCore\RedirectHooks::register();
 \MoneyfrogCore\Byline::register();
+\MoneyfrogCore\BylineAdmin::register();
 \MoneyfrogCore\ContentHooks::register();
 \MoneyfrogCore\ServiceUser::register();
 \MoneyfrogCore\Release::register();

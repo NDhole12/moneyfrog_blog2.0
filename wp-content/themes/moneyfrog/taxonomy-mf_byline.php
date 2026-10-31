@@ -1,5 +1,5 @@
 <?php
-/** Byline (author) archive: the same compact header band and list rows as topic pages. */
+/** Byline (author) archive: photo, role and bio in the compact header band, then list rows as on topic pages. */
 
 if (!defined('ABSPATH')) {
     exit;
@@ -13,6 +13,8 @@ if (!$by instanceof WP_Term) {
 global $wp_query;
 $paged = max(1, (int) get_query_var('paged'));
 $found = (int) $wp_query->found_posts;
+$bio   = trim((string) get_term_meta($by->term_id, 'mf_bio', true));
+$role  = trim((string) get_term_meta($by->term_id, 'mf_role', true));
 mf_prime_posts($wp_query->posts);
 get_header();
 ?>
@@ -24,11 +26,13 @@ get_header();
                 <span aria-hidden="true">/</span>
                 <span aria-current="page"><?php echo esc_html($by->name); ?></span>
             </nav>
-            <div class="cat-head__main">
+            <div class="cat-head__main cat-head__main--author">
+                <?php echo mf_byline_avatar($by, 'xl'); // phpcs:ignore WordPress.Security.EscapeOutput -- core <img> or escaped initials. ?>
                 <div class="cat-head__copy">
                     <span class="eyebrow"><?php echo esc_html(sprintf('Author · %d %s', $found, $found === 1 ? 'article' : 'articles')); ?></span>
                     <h1 class="display"><?php echo esc_html($by->name); ?></h1>
-                    <?php if ($by->description !== '') : ?><p class="lead"><?php echo esc_html($by->description); ?></p><?php endif; ?>
+                    <?php if ($role !== '') : ?><p class="cat-head__role"><?php echo esc_html($role); ?></p><?php endif; ?>
+                    <?php if ($bio !== '') : ?><p class="lead"><?php echo esc_html($bio); ?></p><?php endif; ?>
                 </div>
             </div>
         </div>
