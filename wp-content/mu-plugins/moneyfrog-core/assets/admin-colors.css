@@ -36,11 +36,11 @@ a:hover, a:active, a:focus { color: #16191d; }
 #wpadminbar .quicklinks .menupop .ab-sub-wrapper .ab-item { color: #c9cdd2; }
 #wpadminbar .quicklinks .menupop .ab-sub-wrapper a:hover { color: #e3c66a; }
 
-/* Buttons and notices */
-.wp-core-ui .button-primary { background: #8a6a1f; border-color: #8a6a1f; color: #fff; }
-.wp-core-ui .button-primary:hover, .wp-core-ui .button-primary:focus { background: #7a5c17; border-color: #7a5c17; color: #fff; }
+/* Buttons and notices. Primary comes after the generic .button rules: same specificity, so order decides. */
 .wp-core-ui .button, .wp-core-ui .button-secondary { color: #8a6a1f; border-color: #8a6a1f; }
 .wp-core-ui .button:hover, .wp-core-ui .button-secondary:hover { color: #16191d; border-color: #16191d; }
+.wp-core-ui .button-primary { background: #8a6a1f; border-color: #8a6a1f; color: #fff; }
+.wp-core-ui .button-primary:hover, .wp-core-ui .button-primary:focus { background: #7a5c17; border-color: #7a5c17; color: #fff; }
 .notice-info, .update-nag { border-left-color: #c29a2c; }
 .wrap .page-title-action, .wrap .add-new-h2 { color: #8a6a1f; border-color: #8a6a1f; }
 .wp-core-ui .button:focus, a:focus, input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 2px #8a6a1f; outline: 2px solid transparent; }
