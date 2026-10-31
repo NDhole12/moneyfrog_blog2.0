@@ -20,7 +20,7 @@ function raw() {
         content: rendered('<p>Real text.</p><p>Die besten Online Casino Spiele und Freispiele: Hier ist der Bonus <a href="https://casino-example.invalid/">jetzt spielen</a></p><script>alert(1)</script>'),
       }),
       post({ id: 2, slug: 'market-outlook-may-2024%ef%bb%bf', title: 'Market Outlook &#8211; May 2024', author: 3, content: rendered('<p>One two three four five six seven eight nine ten.</p>') }),
-      post({ id: 3, slug: 'gilt-fund', title: 'Gilt fund (post)', date: '2024-01-01T00:00:00' }),
+      post({ id: 3, slug: 'gilt-fund', title: 'Gilt fund (post)', date: '2024-01-01T00:00:00', author: 5 }),
     ],
     pages: [
       { id: 90, slug: 'gilt-fund', status: 'publish', date: '2023-01-01T00:00:00', modified: '2023-01-02T00:00:00', author: 2, featured_media: 0, link: `${H}/moneyfrog-school/gilt-fund/`, title: rendered('Gilt Fund'), excerpt: rendered(''), content: rendered('<p>School page.</p>') },
@@ -39,6 +39,7 @@ function raw() {
       { id: 2, name: 'Harshada Kadam', slug: 'harshada', description: ' She works on &amp; leads <b>marketing</b>. ', email: 'h@example.invalid', user_login: 'hk' },
       { id: 3, name: 'Mushtaq Kazi', slug: 'mushtaq', description: '' },
       { id: 4, name: 'No Posts', slug: 'nobody', description: 'unused' },
+      { id: 5, name: 'Manoj Chahar', slug: 'manoj', description: 'Founder.' },
     ],
   };
 }
@@ -64,7 +65,7 @@ describe('bundle', () => {
     const sip = bundle.items.find((i) => i.oldId === 1);
     expect(sip).toMatchObject({
       oldType: 'post', newSlug: 'sip-basics', title: 'SIP basics – a guide', topic: 'mutual-funds',
-      byline: 'harshada-kadam', featuredMediaOldId: 500, date: '2024-03-01T10:00:00', modified: '2024-03-02T10:00:00',
+      byline: 'mushtaq-kazi', featuredMediaOldId: 500, date: '2024-03-01T10:00:00', modified: '2024-03-02T10:00:00',
     });
     expect(sip.html).toContain('Real text.');
     expect(sip.html).not.toMatch(/casino|script|alert/i);
@@ -89,12 +90,20 @@ describe('bundle', () => {
     expect(ex).toMatch(/word…?$/);
   });
 
-  it('bylines: only authors with items, slug from name, plain-text bio, empty role', () => {
+  it('bylines: only the two founders, slug from name, plain-text bio, empty role', () => {
     const { bundle } = buildBundle(raw());
     expect(bundle.bylines).toEqual([
-      { slug: 'harshada-kadam', name: 'Harshada Kadam', bio: 'She works on & leads marketing.', role: '' },
+      { slug: 'manoj-chahar', name: 'Manoj Chahar', bio: 'Founder.', role: '' },
       { slug: 'mushtaq-kazi', name: 'Mushtaq Kazi', bio: '', role: '' },
     ]);
+    expect(bundle.items.find((i) => i.oldId === 3).byline).toBe('manoj-chahar');
+    expect(bundle.items.every((i) => ['manoj-chahar', 'mushtaq-kazi'].includes(i.byline))).toBe(true);
+  });
+
+  it('a folded author archive redirects to Mushtaq Kazi, a kept one to its own byline', () => {
+    const { redirects } = buildBundle(raw());
+    expect(redirects['/author/harshada/']).toBe('/author/mushtaq-kazi/');
+    expect(redirects['/author/manoj/']).toBe('/author/manoj-chahar/');
   });
 
   it('media keeps the original upload path and is not redirected', () => {

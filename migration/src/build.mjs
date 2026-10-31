@@ -4,7 +4,7 @@ import path from 'node:path';
 import * as cheerio from 'cheerio';
 import { sanitize } from './sanitize.mjs';
 import { buildPlan } from './review.mjs';
-import { slugify, cleanSlug, isSchoolPage, normalisePath } from './slugs.mjs';
+import { slugify, cleanSlug, isSchoolPage, normalisePath, consolidateByline } from './slugs.mjs';
 import { renderRedirectsPhp, renderInventory, renderReport } from './render.mjs';
 
 export { renderRedirectsPhp, renderInventory, renderReport };
@@ -103,7 +103,7 @@ export function buildBundle({ posts, pages, media, categories, tags, users }) {
     ...pages.filter((p) => isSchoolPage(p.link)).map((src) => ({ src, type: 'page' })),
   ];
   const tagSlug = new Map(tags.map((t) => [t.id, cleanSlug(t.slug)]));
-  const authorSlug = new Map(cleanUsers.map((u) => [u.id, slugify(u.name)]));
+  const authorSlug = new Map(cleanUsers.map((u) => [u.id, consolidateByline(slugify(u.name))]));
 
   const removedCounts = {};
   const flagCounts = {};
@@ -146,8 +146,9 @@ export function buildBundle({ posts, pages, media, categories, tags, users }) {
   const bylines = buildBylines(users, items);
   const bylineSlugs = new Set(bylines.map((b) => b.slug));
   // Authors with no migrated items have no archive on the new site: send them home.
+  const authorsWithItems = new Set(sources.map(({ src }) => src.author));
   for (const u of users) {
-    if (!bylineSlugs.has(slugify(plain(u.name)))) redirects[normalisePath(`/author/${u.slug}/`)] = '/';
+    if (!authorsWithItems.has(u.id)) redirects[normalisePath(`/author/${u.slug}/`)] = '/';
   }
   const bundle = {
     generatedAt: items.map((i) => i.modified).sort().at(-1) ?? '',

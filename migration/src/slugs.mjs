@@ -86,8 +86,15 @@ export function buildCategoryMap(categories) {
   return map;
 }
 
+// Owner's rule (2026-10-31): every old article is by Manoj Chahar or Mushtaq Kazi (MK); any other author becomes MK.
+const KEPT_BYLINES = new Set(['manoj-chahar', 'mushtaq-kazi']);
+const DEFAULT_BYLINE = 'mushtaq-kazi';
+
+/** The byline an old author's articles are published under on the new site. */
+export const consolidateByline = (slug) => (KEPT_BYLINES.has(slug) ? slug : DEFAULT_BYLINE);
+
 export function buildAuthorMap(users) {
-  return Object.fromEntries(users.map((u) => [u.slug, slugify(u.name)]));
+  return Object.fromEntries(users.map((u) => [u.slug, consolidateByline(slugify(u.name))]));
 }
 
 const SCHOOL = '/moneyfrog-school/';

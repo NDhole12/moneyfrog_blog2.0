@@ -1,5 +1,31 @@
 import { describe, it, expect } from 'vitest';
-import { cleanSlug, assignSlugs, buildRedirects, normalisePath, pageRedirects, buildCategoryMap } from '../src/slugs.mjs';
+import {
+  cleanSlug, assignSlugs, buildRedirects, normalisePath, pageRedirects, buildCategoryMap, buildAuthorMap, consolidateByline,
+} from '../src/slugs.mjs';
+
+describe('author consolidation (owner rule 2026-10-31: old articles are by Manoj Chahar or Mushtaq Kazi only)', () => {
+  it('keeps the two founders and folds every other author into Mushtaq Kazi', () => {
+    expect(consolidateByline('manoj-chahar')).toBe('manoj-chahar');
+    expect(consolidateByline('mushtaq-kazi')).toBe('mushtaq-kazi');
+    expect(consolidateByline('harshada-kadam')).toBe('mushtaq-kazi');
+    expect(consolidateByline('sanket')).toBe('mushtaq-kazi');
+    expect(consolidateByline('')).toBe('mushtaq-kazi');
+  });
+
+  it('old author archives point straight at the consolidated byline', () => {
+    const map = buildAuthorMap([
+      { slug: 'manoj', name: 'Manoj Chahar' },
+      { slug: 'mushtaq', name: 'Mushtaq Kazi' },
+      { slug: 'sanket', name: 'Sanket' },
+      { slug: 'shitalufale', name: 'Shital Ufale' },
+    ]);
+    expect(map).toEqual({ manoj: 'manoj-chahar', mushtaq: 'mushtaq-kazi', sanket: 'mushtaq-kazi', shitalufale: 'mushtaq-kazi' });
+    const redirects = buildRedirects([], {}, map);
+    expect(redirects['/author/sanket/']).toBe('/author/mushtaq-kazi/');
+    expect(redirects['/author/shitalufale/']).toBe('/author/mushtaq-kazi/');
+    expect(redirects['/author/manoj/']).toBe('/author/manoj-chahar/');
+  });
+});
 
 describe('normalisePath (parity with Redirects::normalisePath)', () => {
   it.each([
