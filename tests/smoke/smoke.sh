@@ -221,26 +221,15 @@ home_sections() {
   local h; h="$(home_html)"
   grep -q 'Codespark QA – Market Outlook: October 2026' <<<"$h" || return 1
   [ "$(grep -o 'class="card card--compact' <<<"$h" | wc -l | tr -d ' ')" = 4 ] || return 1
-  grep -q 'Browse by topic' <<<"$h" || return 1
-  [ "$(grep -o 'class="topic-tile" href="[^"]*/category/[a-z-]*/"' <<<"$h" | wc -l | tr -d ' ')" = 6 ]
-}
-editors_picks_layout() {
-  local h flat sec item
-  h="$(home_html)"; flat="$(tr '
-' ' ' <<<"$h")"
-  grep -qE '<h2 class="picks-head__h"[^>]*>Editor(’|&rsquo;|&#8217;|'"'"')s Picks</h2>' <<<"$flat" || return 1
-  grep -qE '<a class="picks-head__all"[^>]*aria-label="All articles"' <<<"$flat" || return 1
-  sec="$(grep -o '<ol class="picks__list">.*' <<<"$flat" | sed 's#</ol>.*#</ol>#')"
-  [ "$(grep -o '<li class="picks__item">' <<<"$sec" | wc -l | tr -d ' ')" = 4 ] || return 1
-  while IFS= read -r item; do
-    [ "$(grep -o '<a ' <<<"$item" | wc -l | tr -d ' ')" = 1 ] || return 1
-    grep -q 'class="picks__n"' <<<"$item" || return 1
-    grep -q 'class="card__eyebrow picks__topic"' <<<"$item" || return 1
-    grep -q 'class="picks__link" href=' <<<"$item" || return 1
-    grep -qE '<img |class="mf-cover' <<<"$item" || return 1
-    grep -q 'class="picks__arrow" aria-hidden="true"' <<<"$item" || return 1
-  done < <(sed 's#<li class="picks__item">#
-&#g' <<<"$sec" | grep '^<li class="picks__item">')
+  local title
+  for title in 'Financial Blogs, Market Outlooks &amp; Investment Guides' 'Featured Articles' \
+    'Explore articles by financial interest' 'Latest insights' 'Market Outlook' 'Moneyfrog School' \
+    'like us to explore?' 'Insights, now on the go.' 'Ready to Put Your Money to Work?'; do
+    grep -qF "$title" <<<"$h" || return 1
+  done
+  grep -q 'href="mailto:blog@moneyfrog.in"' <<<"$h" || return 1
+  grep -q 'data-load-more' <<<"$h" || return 1
+  [ "$(grep -o 'class="interest-tile" href="[^"]*"' <<<"$h" | wc -l | tr -d ' ')" = 8 ]
 }
 cover_for_no_image() { home_html | grep -q 'class="mf-cover'; }
 category_page() {
@@ -538,7 +527,6 @@ check       header_footer_match_live header_footer_match_live   # HTTP-only: als
 check       404_themed            not_found_themed
 
 check_local home_sections      home_sections
-check_local editors_picks_layout editors_picks_layout
 check_local cover_for_no_image cover_for_no_image
 check_local category_page      category_page
 check_local search_works       search_works

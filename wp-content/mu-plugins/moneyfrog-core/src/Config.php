@@ -30,4 +30,22 @@ final class Config
         'financial-planning' => 'Goals, budgets, life stages',
         'guides'             => 'The basics, explained simply',
     ];
+
+    /**
+     * Home page "Explore articles by financial interest" tiles, in display order.
+     * Category slug => tile name and the search phrase the tile falls back to while the
+     * category has no articles filed under it yet.
+     */
+    public const INTERESTS = [
+        'mutual-funds' => ['name' => 'Mutual Funds', 'search' => 'mutual fund'],
+        'gift-city'    => ['name' => 'GIFT City', 'search' => 'GIFT City'],
+        'fixed-income' => ['name' => 'Fixed Income', 'search' => 'fixed income'],
+        'aif'          => ['name' => 'AIF', 'search' => 'alternative investment'],
+        'pms'          => ['name' => 'PMS', 'search' => 'portfolio management'],
+        'equity'       => ['name' => 'Equity', 'search' => 'equity'],
+        'insurance'    => ['name' => 'Insurance', 'search' => 'insurance'],
+        'tax'          => ['name' => 'Tax Planning', 'search' => 'tax'],
+    ];
+
+    public const BLOG_EMAIL = 'blog@moneyfrog.in';
 }

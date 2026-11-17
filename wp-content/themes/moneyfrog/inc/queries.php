@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 }
 
 const MF_CATEGORY_PER_PAGE = 10;
-const MF_HOME_LATEST_PER_PAGE = 8;
+const MF_HOME_LATEST_PER_PAGE = 6;
 /** Tags that drive layout (picks, popular, pinned) and so are not shown as sub-topics. */
 const MF_UTILITY_TAGS = ['popular', 'editors-pick', 'start-here'];
 
@@ -111,11 +111,11 @@ function mf_card_data(WP_Post $post, string $size = 'mf-card'): array
 }
 
 /**
- * Home page data. featured = newest Market Outlook; picks = editors-pick tag (fallback
- * newest non-outlook); outlook = next four outlooks; latest = paged query excluding those;
- * guides = start-here posts by mf_order (fallback oldest five Guides).
+ * Home page data. featured = newest Market Outlook; outlook = next four outlooks;
+ * latest = paged query excluding those; guides = start-here posts by mf_order
+ * (fallback oldest five Guides).
  *
- * @return array{featured:?WP_Post, picks:WP_Post[], outlook:WP_Post[], latest:WP_Query, guides:WP_Post[]}
+ * @return array{featured:?WP_Post, outlook:WP_Post[], latest:WP_Query, guides:WP_Post[]}
  */
 function mf_home_sections(): array
 {
@@ -123,13 +123,7 @@ function mf_home_sections(): array
     $featured = $outlooks[0] ?? null;
     $outlook  = array_slice($outlooks, 1, 4);
 
-    $picks = mf_query_posts(['tag' => 'editors-pick', 'posts_per_page' => 4]);
-    if ($picks === []) {
-        $skip  = get_category_by_slug('market-outlook');
-        $picks = mf_query_posts(['posts_per_page' => 4, 'category__not_in' => $skip ? [$skip->term_id] : []]);
-    }
-
-    $shown = array_map(static fn (WP_Post $p): int => $p->ID, array_merge($featured ? [$featured] : [], $picks, $outlook));
+    $shown = array_map(static fn (WP_Post $p): int => $p->ID, array_merge($featured ? [$featured] : [], $outlook));
     $latest = new WP_Query([
         'post_type'           => 'post',
         'post_status'         => 'publish',
@@ -142,11 +136,32 @@ function mf_home_sections(): array
 
     return [
         'featured' => $featured,
-        'picks'    => $picks,
         'outlook'  => $outlook,
         'latest'   => $latest,
         'guides'   => mf_home_guides(),
     ];
+}
+
+/**
+ * Home "Explore articles by financial interest" tiles. A tile goes to its category once that
+ * category has articles; until then it goes to a search for the topic, so it never dead-ends.
+ *
+ * @return array<int, array{slug:string, name:string, url:string, icon:string}>
+ */
+function mf_home_interests(): array
+{
+    $tiles = [];
+    foreach (Config::INTERESTS as $slug => $interest) {
+        $term  = get_category_by_slug($slug);
+        $filed = $term instanceof WP_Term && (int) $term->count > 0;
+        $tiles[] = [
+            'slug' => $slug,
+            'name' => $interest['name'],
+            'url'  => $filed ? home_url('/category/' . $slug . '/') : add_query_arg('s', rawurlencode($interest['search']), home_url('/')),
+            'icon' => get_template_directory_uri() . '/assets/img/home/interest-' . $slug . '.webp',
+        ];
+    }
+    return $tiles;
 }
 
 /** @return WP_Post[] */

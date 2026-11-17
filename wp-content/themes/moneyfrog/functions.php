@@ -32,6 +32,9 @@ add_action('wp_enqueue_scripts', static function (): void {
     wp_enqueue_style('mf-components', $uri . '/assets/css/components.css', ['mf-base'], $ver('/assets/css/components.css'));
     wp_enqueue_style('mf-pages', $uri . '/assets/css/pages.css', ['mf-components'], $ver('/assets/css/pages.css'));
     wp_enqueue_script('mf-nav', $uri . '/assets/js/nav.js', [], $ver('/assets/js/nav.js'), ['in_footer' => true, 'strategy' => 'defer']);
+    if (is_home() || is_front_page()) {
+        wp_enqueue_script('mf-load-more', $uri . '/assets/js/load-more.js', [], $ver('/assets/js/load-more.js'), ['in_footer' => true, 'strategy' => 'defer']);
+    }
 });
 
 // Drop emoji detection (inline script + extra stylesheet) and the unused block-library CSS.

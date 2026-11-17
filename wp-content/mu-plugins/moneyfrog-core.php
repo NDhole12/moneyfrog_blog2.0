@@ -43,6 +43,7 @@ if (defined('WP_CLI') && WP_CLI) {
 \MoneyfrogCore\Byline::register();
 \MoneyfrogCore\BylineAdmin::register();
 \MoneyfrogCore\ContentHooks::register();
+\MoneyfrogCore\Interests::register();
 \MoneyfrogCore\ServiceUser::register();
 \MoneyfrogCore\Release::register();
 \MoneyfrogCore\AdminBrand::register();

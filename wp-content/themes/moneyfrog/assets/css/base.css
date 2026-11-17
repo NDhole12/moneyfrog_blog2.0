@@ -24,7 +24,7 @@ body.is-locked { overflow: hidden; }
 .wrap { width: min(var(--wrap), 100% - 2 * var(--gutter)); margin-inline: auto; }
 .section { padding-block: var(--sec-pad); }
 main { font-size: var(--fs-body); line-height: 1.6; }
-main time, main .card__meta, .popular__n, .picks__n, .start-here__n, .topic-tile__count, .pagination { font-variant-numeric: tabular-nums; }
+main time, main .card__meta, .popular__n, .school__n, .pagination { font-variant-numeric: tabular-nums; }
 /* Buttons inside the blog layer are compact; header and footer buttons are untouched. */
 main .btn { height: 40px; padding: 0 var(--sp-4); font-size: var(--fs-btn); }
 

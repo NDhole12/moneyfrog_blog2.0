@@ -1,6 +1,6 @@
 <?php
 /**
- * Article card. Args: ['post' => WP_Post, 'layout' => 'default'|'compact'|'featured'].
+ * Article card. Args: ['post' => WP_Post, 'layout' => 'default'|'compact'|'featured', 'cta' => string].
  * One link (the title) covers the whole card, so screen readers hear a single target.
  */
 
@@ -14,7 +14,8 @@ if (!$post instanceof WP_Post) {
 }
 $layout  = in_array($args['layout'] ?? '', ['compact', 'featured'], true) ? $args['layout'] : 'default';
 $c       = mf_card_data($post, $layout === 'featured' ? 'mf-hero' : 'mf-card');
-$heading = $layout === 'featured' ? 'h2' : 'h3';
+$heading = 'h3'; // every card sits under a section <h2>
+$cta     = (string) ($args['cta'] ?? ''); // visual "Read article" cue; the title link already covers the card
 $eyebrow = $c['topic'];
 if ($layout === 'featured') {
     $eyebrow = 'Featured · ' . $c['topic'];
@@ -44,6 +45,9 @@ if ($layout === 'featured') {
                 <time datetime="<?php echo esc_attr($c['date_iso']); ?>"><?php echo esc_html($c['date']); ?></time>
                 <span><?php echo esc_html($c['read'] . ' min read'); ?></span>
             </p>
+        <?php endif; ?>
+        <?php if ($cta !== '') : ?>
+            <span class="card__cta" aria-hidden="true"><?php echo esc_html($cta); ?> <?php echo mf_icon('i-arrow'); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside mf_icon(). ?></span>
         <?php endif; ?>
     </div>
 </article>
