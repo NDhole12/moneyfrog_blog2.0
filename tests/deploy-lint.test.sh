@@ -10,6 +10,9 @@ ok() { echo "PASS $1"; }
 bad() { echo "FAIL $1"; FAIL=1; }
 
 grep -q '<(' <<<"$BLOCK" && bad "no_process_substitution" || ok "no_process_substitution"
+# The block lives inside the single-quoted REMOTE_SCRIPT: a single quote would end that string
+# and expand the rest on the deploying machine (the deploy then dies on an unbound variable).
+grep -q "'" <<<"$BLOCK" && bad "no_single_quote_in_block" || ok "no_single_quote_in_block"
 
 run() { ( cd "$1" && bash -c "set -euo pipefail; cleanup() { :; }; $BLOCK" ) >"$2" 2>&1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT

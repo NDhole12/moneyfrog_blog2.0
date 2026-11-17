@@ -235,7 +235,7 @@ $COMPOSER_BIN install --no-dev --no-interaction --no-progress </dev/null
 # LINT-BEGIN (no process substitution: it fails under CageFS; tests/deploy-lint.test.sh extracts this block)
 echo "== php -l on the release =="
 LINT_LIST=$(mktemp)
-trap 'rm -f "$LINT_LIST"; cleanup' EXIT
+trap "rm -f \"\$LINT_LIST\"; cleanup" EXIT   # no single quotes here: this whole script is one single-quoted string
 find wp-content/mu-plugins wp-content/themes/moneyfrog wp-content/plugins/two-factor -name "*.php" -print0 > "$LINT_LIST" </dev/null   || { rm -f "$LINT_LIST"; echo "find failed while listing PHP files" >&2; exit 13; }
 n=0
 while IFS= read -r -d "" f; do
