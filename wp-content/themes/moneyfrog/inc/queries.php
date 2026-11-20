@@ -112,14 +112,31 @@ function mf_card_data(WP_Post $post, string $size = 'mf-card'): array
     ];
 }
 
-/** Newest post matching $args that carries the featured tag; else simply the newest match. */
+/** True when a card for this post would have a description (an excerpt, or text in the body). */
+function mf_post_has_text(WP_Post $post): bool
+{
+    $text = $post->post_excerpt !== '' ? $post->post_excerpt : wp_strip_all_tags(strip_shortcodes($post->post_content));
+    return trim($text) !== '';
+}
+
+/**
+ * Post for a Featured Articles card: the newest match carrying the featured tag, else the
+ * newest match that has text for the card's description (an image-only post is passed over
+ * while a recent one with text exists).
+ */
 function mf_home_pick(array $args): ?WP_Post
 {
-    $picked = mf_query_posts($args + ['tag' => MF_HOME_FEATURED_TAG, 'posts_per_page' => 1]);
-    if ($picked === []) {
-        $picked = mf_query_posts($args + ['posts_per_page' => 1]);
+    $tagged = mf_query_posts($args + ['tag' => MF_HOME_FEATURED_TAG, 'posts_per_page' => 1]);
+    if ($tagged !== []) {
+        return $tagged[0];
     }
-    return $picked[0] ?? null;
+    $recent = mf_query_posts($args + ['posts_per_page' => 6]);
+    foreach ($recent as $post) {
+        if (mf_post_has_text($post)) {
+            return $post;
+        }
+    }
+    return $recent[0] ?? null;
 }
 
 /**
