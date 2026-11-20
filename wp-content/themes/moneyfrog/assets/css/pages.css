@@ -108,26 +108,26 @@
 .section-head .eyebrow { margin-bottom: 6px; }
 .section-head .h2 { max-width: none; }
 .section-head .lead { margin-top: 4px; max-width: 560px; }
-.home-featured, .home-interests, .home-latest, .outlook, .home-school, .home-suggest, .home-app { padding-block: var(--home-pad); }
-.home-featured { padding-top: var(--gap-section); }
-.home-app { padding-bottom: var(--gap-section); }
+.home-featured, .home-interests, .home-latest, .outlook, .home-school, .home-suggest, .home-app { padding-block: var(--gap-section); }
+/* Section backgrounds alternate down the page: ivory hero, beige, ivory ... ending on an ivory call to action. */
+.home-hero, .home-interests, .outlook, .home-suggest { background: var(--bg); }
+.home-featured, .home-latest, .home-school, .home-app { background: var(--topbar); }
 
 /* 01 Hero */
-.home-hero { background: var(--topbar); border-bottom: 1px solid var(--line); }
+.home-hero { border-bottom: 1px solid var(--line); }
 .home-hero__inner { display: grid; gap: var(--sp-5); align-items: center; padding-block: var(--sp-5); }
-.home-hero__title { font: 400 var(--fs-hero)/1.12 var(--serif); letter-spacing: -.015em; color: var(--ink); max-width: 620px; }
+.home-hero__title { font: 400 var(--fs-hero)/1.12 var(--serif); letter-spacing: -.015em; color: var(--ink); max-width: 760px; }
+/* The approved two-line break applies where the first line fits; narrower screens wrap naturally. */
+@media (max-width: 1099px) { .home-hero__break { display: none; } }
 .home-hero__lead { margin-top: var(--sp-3); max-width: 640px; font-size: 16px; line-height: 1.6; color: var(--ink-2); }
 .home-hero__art { width: min(100%, var(--hero-art)); height: auto; aspect-ratio: 1; border-radius: var(--radius-art); object-fit: cover; }
 @media (min-width: 800px) { .home-hero__inner { grid-template-columns: minmax(0, 1fr) var(--hero-art); gap: var(--sp-6); } }
 
-/* 02 Featured */
-@media (min-width: 900px) {
-  .home-featured .card--featured { display: grid; grid-template-columns: minmax(0, 52fr) minmax(0, 48fr); }
-  .home-featured .card--featured .card__media { aspect-ratio: 16 / 10; }
-  .home-featured .card--featured .card__media img { object-fit: cover; object-position: center; }
-  .home-featured .card--featured .card__meta { margin-top: var(--sp-4); padding-top: 0; }
-  .home-featured .card--featured .card__body { justify-content: center; padding: var(--sp-6); }
-}
+/* 02 Featured: three cards the size of a Market Outlook card (a quarter of the row), centred. */
+.featured-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--grid-gap); }
+.featured-cards > .card { flex: 0 1 100%; }
+@media (min-width: 600px) { .featured-cards > .card { flex-basis: calc((100% - var(--grid-gap)) / 2); } }
+@media (min-width: 960px) { .featured-cards > .card { flex-basis: calc((100% - 3 * var(--grid-gap)) / 4); } }
 
 /* 03 Explore by financial interest */
 .interest-tiles { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--grid-gap); }
@@ -145,7 +145,9 @@
 /* 04 Latest insights */
 .card__cta { margin-top: var(--sp-3); }
 .card--compact .card__cta { margin-top: auto; padding-top: var(--sp-3); }
-@media (min-width: 1200px) { .home-latest .card-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* Same columns as the Market Outlook row, so every card matches its size: 8 cards make 4 x 2. */
+@media (min-width: 600px) { .card-grid--latest { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .card-grid--latest { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .home-latest .pagination { justify-content: center; margin-top: var(--sp-5); }
 .home-latest__more { display: flex; justify-content: center; margin-top: var(--sp-5); }
 .home-latest__more .btn { min-width: 200px; }
@@ -156,7 +158,7 @@
 /* 06 Moneyfrog School */
 .school { display: grid; border: 1px solid var(--line-card); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 @media (min-width: 800px) { .school { grid-template-columns: minmax(0, 3fr) minmax(0, 7fr); } }
-.school__intro { display: flex; flex-direction: column; align-items: flex-start; padding: var(--sp-5); background: var(--topbar); }
+.school__intro { display: flex; flex-direction: column; align-items: flex-start; padding: var(--sp-5); background: var(--bg); }
 .school__title { font: 400 var(--fs-featured)/1.2 var(--serif); letter-spacing: -.01em; color: var(--ink); }
 .school__title em { display: block; font-style: italic; color: var(--gold-ink); }
 .school__intro p { margin-top: var(--sp-2); font-size: var(--fs-excerpt); line-height: 1.55; color: var(--ink-2); }

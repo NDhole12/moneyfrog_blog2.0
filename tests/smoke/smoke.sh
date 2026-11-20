@@ -220,11 +220,15 @@ home_sections() {
   seed_fixtures
   local h; h="$(home_html)"
   grep -q 'Codespark QA – Market Outlook: October 2026' <<<"$h" || return 1
-  [ "$(grep -o 'class="card card--compact' <<<"$h" | wc -l | tr -d ' ')" = 4 ] || return 1
+  # Four Market Outlook cards plus the Featured Articles cards (blog, guide, outlook: the ones that exist).
+  local compact; compact="$(grep -o 'class="card card--compact' <<<"$h" | wc -l | tr -d ' ')"
+  [ "$compact" -ge 5 ] && [ "$compact" -le 7 ] || return 1
+  grep -q 'class="featured-cards"' <<<"$h" || return 1
+  grep -q 'class="card-grid card-grid--latest"' <<<"$h" || return 1
   local title
-  for title in 'Financial Blogs, Market Outlooks &amp; Investment Guides' 'Featured Articles' \
+  for title in 'Financial Blogs, Market Outlooks<br class="home-hero__break"> &amp; Investment Guides' 'Featured Articles' \
     'Explore articles by financial interest' 'Latest insights' 'Market Outlook' 'Moneyfrog School' \
-    'like us to explore?' 'Insights, now on the go.' 'Ready to Put Your Money to Work?'; do
+    'like us to cover?' 'Insights, now on the go.' 'Ready to Put Your Money to Work?'; do
     grep -qF "$title" <<<"$h" || return 1
   done
   grep -q 'href="mailto:blog@moneyfrog.in"' <<<"$h" || return 1
@@ -309,7 +313,7 @@ search_works() {
 }
 newsletter_hidden() { ! home_html | grep -q 'type="email"'; }
 advisor_cta() { home_html | tr '
-' ' ' | grep -q 'class="advisor-cta".*href="https://moneyfrog.in/contact-us"'; }
+' ' ' | grep -q 'class="advisor-cta".*href="https://moneyfrog.in/#consult"'; }
 
 # ---- single post page (real imported posts; local only) ----
 SINGLE_DEC=/market-outlook-december-2025/

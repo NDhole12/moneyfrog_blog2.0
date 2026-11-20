@@ -14,7 +14,9 @@ if (!defined('ABSPATH')) {
 }
 
 const MF_CATEGORY_PER_PAGE = 10;
-const MF_HOME_LATEST_PER_PAGE = 6;
+const MF_HOME_LATEST_PER_PAGE = 8;
+/** A post carrying this tag is preferred for its Featured Articles card on the home page. */
+const MF_HOME_FEATURED_TAG = 'editors-pick';
 /** Tags that drive layout (picks, popular, pinned) and so are not shown as sub-topics. */
 const MF_UTILITY_TAGS = ['popular', 'editors-pick', 'start-here'];
 
@@ -110,20 +112,56 @@ function mf_card_data(WP_Post $post, string $size = 'mf-card'): array
     ];
 }
 
+/** Newest post matching $args that carries the featured tag; else simply the newest match. */
+function mf_home_pick(array $args): ?WP_Post
+{
+    $picked = mf_query_posts($args + ['tag' => MF_HOME_FEATURED_TAG, 'posts_per_page' => 1]);
+    if ($picked === []) {
+        $picked = mf_query_posts($args + ['posts_per_page' => 1]);
+    }
+    return $picked[0] ?? null;
+}
+
 /**
- * Home page data. featured = newest Market Outlook; outlook = next four outlooks;
- * latest = paged query excluding those; guides = start-here posts by mf_order
- * (fallback oldest five Guides).
+ * Home "Featured Articles": one card each for a blog article, a guide and a Market Outlook,
+ * in that order. A kind with no article yet is left out.
  *
- * @return array{featured:?WP_Post, outlook:WP_Post[], latest:WP_Query, guides:WP_Post[]}
+ * @return array<int, array{post:WP_Post, label:string, cta:string}>
+ */
+function mf_home_featured(?WP_Post $outlook): array
+{
+    $termIds = [];
+    foreach (['guides', 'market-outlook'] as $slug) {
+        $term = get_category_by_slug($slug);
+        if ($term instanceof WP_Term) {
+            $termIds[] = (int) $term->term_id;
+        }
+    }
+    $candidates = [
+        ['post' => mf_home_pick(['category__not_in' => $termIds]), 'label' => 'Blog', 'cta' => 'Read blog'],
+        ['post' => mf_home_pick(['category_name' => 'guides']), 'label' => 'Guide', 'cta' => 'Read guide'],
+        ['post' => $outlook, 'label' => 'Market Outlook', 'cta' => 'Read outlook'],
+    ];
+    return array_values(array_filter($candidates, static fn (array $c): bool => $c['post'] instanceof WP_Post));
+}
+
+/**
+ * Home page data. featured = one blog article, one guide and the newest Market Outlook;
+ * outlook = the next four outlooks; latest = paged query excluding all of those;
+ * guides = start-here posts by mf_order (fallback oldest five Guides).
+ *
+ * @return array{featured:array<int, array{post:WP_Post, label:string, cta:string}>, outlook:WP_Post[], latest:WP_Query, guides:WP_Post[]}
  */
 function mf_home_sections(): array
 {
     $outlooks = mf_query_posts(['category_name' => 'market-outlook', 'posts_per_page' => 5]);
-    $featured = $outlooks[0] ?? null;
+    $featured = mf_home_featured($outlooks[0] ?? null);
     $outlook  = array_slice($outlooks, 1, 4);
 
-    $shown = array_map(static fn (WP_Post $p): int => $p->ID, array_merge($featured ? [$featured] : [], $outlook));
+    $shown = array_map(
+        static fn (WP_Post $p): int => $p->ID,
+        array_merge(array_column($featured, 'post'), $outlook)
+    );
     $latest = new WP_Query([
         'post_type'           => 'post',
         'post_status'         => 'publish',

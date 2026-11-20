@@ -1,7 +1,8 @@
 <?php
 /**
- * Blog home, in the approved order: hero, featured article, explore by financial interest,
+ * Blog home, in the approved order: hero, featured articles, explore by financial interest,
  * latest insights, Market Outlook, Moneyfrog School, suggest a topic, app, final call to action.
+ * Section backgrounds alternate ivory and beige, starting with an ivory hero.
  * Pages 2+ (/page/N/) show only the latest list; "Load More Articles" reads them in place.
  */
 
@@ -24,14 +25,14 @@ get_header();
         <div class="wrap home-hero__inner">
             <div class="home-hero__copy">
                 <span class="eyebrow">Moneyfrog Insights</span>
-                <h1 class="home-hero__title">Financial Blogs, Market Outlooks &amp; Investment Guides</h1>
+                <h1 class="home-hero__title">Financial Blogs, Market Outlooks<br class="home-hero__break"> &amp; Investment Guides</h1>
                 <p class="home-hero__lead">Discover investment articles, monthly market outlooks and educational guides covering mutual funds, equity, fixed income, insurance and more. Explore financial topics and build your knowledge with Moneyfrog.</p>
             </div>
             <img class="home-hero__art" src="<?php echo esc_url($img . 'hero.webp'); ?>" alt="" width="880" height="880" decoding="async" fetchpriority="high">
         </div>
     </section>
 
-    <?php if ($featured) : ?>
+    <?php if ($featured !== []) : ?>
     <section class="home-featured">
         <div class="wrap">
             <div class="section-head">
@@ -41,7 +42,11 @@ get_header();
                     <p class="lead">A selected read offering perspectives worth exploring.</p>
                 </div>
             </div>
-            <?php get_template_part('template-parts/card', null, ['post' => $featured, 'layout' => 'featured', 'cta' => 'Read featured article']); ?>
+            <div class="featured-cards">
+                <?php foreach ($featured as $f) : ?>
+                    <?php get_template_part('template-parts/card', null, ['post' => $f['post'], 'layout' => 'compact', 'eyebrow' => $f['label'], 'excerpt' => true, 'cta' => $f['cta']]); ?>
+                <?php endforeach; ?>
+            </div>
         </div>
     </section>
     <?php endif; ?>
@@ -80,7 +85,7 @@ get_header();
                 </div>
             </div>
             <?php if ($s['latest']->have_posts()) : ?>
-                <div class="card-grid card-grid--3">
+                <div class="card-grid card-grid--latest">
                     <?php foreach ($s['latest']->posts as $p) : ?>
                         <?php get_template_part('template-parts/card', null, ['post' => $p, 'cta' => 'Read article']); ?>
                     <?php endforeach; ?>
@@ -100,7 +105,7 @@ get_header();
 
 <?php if ($paged === 1) : ?>
     <?php if ($s['outlook']) : ?>
-    <section class="band outlook">
+    <section class="outlook">
         <div class="wrap">
             <div class="section-head">
                 <div>
@@ -157,10 +162,10 @@ get_header();
             <div class="suggest">
                 <div class="suggest__copy">
                     <span class="eyebrow">Your voice matters</span>
-                    <h2 class="h2">Have a question or a topic you&rsquo;d like us to explore?</h2>
-                    <p class="lead">Your curiosity inspires our content. Share your questions or suggest a financial topic.</p>
+                    <h2 class="h2">Have a financial topic you&rsquo;d like us to cover?</h2>
+                    <p class="lead">Write to us with your questions or suggest a topic you&rsquo;d like to read about. We&rsquo;d love to hear from you.</p>
                 </div>
-                <a class="btn btn--gold" href="<?php echo esc_url('mailto:' . Config::BLOG_EMAIL); ?>">Email <?php echo esc_html(Config::BLOG_EMAIL); ?></a>
+                <a class="btn btn--gold" href="<?php echo esc_url('mailto:' . Config::BLOG_EMAIL); ?>" aria-label="<?php echo esc_attr('Email ' . Config::BLOG_EMAIL); ?>"><?php echo mf_icon('i-mail'); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside mf_icon(). ?> <?php echo esc_html(Config::BLOG_EMAIL); ?></a>
             </div>
         </div>
     </section>
@@ -184,8 +189,8 @@ get_header();
         'title'  => 'Ready to Put Your Money to Work?',
         'lead'   => 'Discover investment options across mutual funds, equities and more.',
         'button' => 'Connect with Moneyfrog',
+        'url'    => Config::CONSULT_URL,
         'phone'  => false,
-        'band'   => true,
     ]);
     ?>
 <?php endif; ?>

@@ -6,6 +6,8 @@ final class Config
 {
     public const SITE_URL = 'https://moneyfrog.in';
     public const BOOK_CALL_URL = 'https://moneyfrog.in/contact-us';
+    /** Opens the Book a Free Consultation form on moneyfrog.in. */
+    public const CONSULT_URL = 'https://moneyfrog.in/#consult';
     public const GTM_ID = 'GTM-M9PS8WZT';
     public const NEWSLETTER_ENABLED = false;
 

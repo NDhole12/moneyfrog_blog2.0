@@ -1,6 +1,7 @@
 <?php
 /**
- * Article card. Args: ['post' => WP_Post, 'layout' => 'default'|'compact'|'featured', 'cta' => string].
+ * Article card. Args: ['post' => WP_Post, 'layout' => 'default'|'compact'|'featured', 'cta' => string,
+ * 'eyebrow' => string (replaces the layout's own label), 'excerpt' => bool (show it on a compact card)].
  * One link (the title) covers the whole card, so screen readers hear a single target.
  */
 
@@ -22,6 +23,10 @@ if ($layout === 'featured') {
 } elseif ($layout === 'compact') {
     $eyebrow = $c['month'];
 }
+if (trim((string) ($args['eyebrow'] ?? '')) !== '') {
+    $eyebrow = trim((string) $args['eyebrow']);
+}
+$showExcerpt = ($layout !== 'compact' || !empty($args['excerpt'])) && $c['excerpt'] !== '';
 ?>
 <article class="card card--<?php echo esc_attr($layout); ?>">
     <div class="card__media">
@@ -36,7 +41,7 @@ if ($layout === 'featured') {
     <div class="card__body">
         <p class="card__eyebrow"><?php echo esc_html($eyebrow); ?></p>
         <<?php echo $heading; ?> class="card__title"><a class="card__link" href="<?php echo esc_url($c['url']); ?>"><?php echo esc_html($c['title']); ?></a></<?php echo $heading; ?>>
-        <?php if ($layout !== 'compact' && $c['excerpt'] !== '') : ?>
+        <?php if ($showExcerpt) : ?>
             <p class="card__excerpt"><?php echo esc_html($c['excerpt']); ?></p>
         <?php endif; ?>
         <?php if ($layout !== 'compact') : ?>

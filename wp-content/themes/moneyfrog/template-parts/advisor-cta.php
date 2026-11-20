@@ -1,7 +1,7 @@
 <?php
 /**
  * Closing call to action: book a call with an advisor.
- * Args (all optional): ['title' => string, 'lead' => string, 'button' => string, 'phone' => bool, 'band' => bool].
+ * Args (all optional): ['title' => string, 'lead' => string, 'button' => string, 'url' => string, 'phone' => bool, 'band' => bool].
  * Without args it renders the default wording used on topic, search and author pages.
  */
 
@@ -14,6 +14,7 @@ if (!defined('ABSPATH')) {
 $title  = (string) ($args['title'] ?? '');
 $lead   = (string) ($args['lead'] ?? 'Talk to a Moneyfrog advisor about your goals, your portfolio, or anything you read here.');
 $button = (string) ($args['button'] ?? 'Book a call');
+$url    = (string) ($args['url'] ?? Config::BOOK_CALL_URL);
 $phone  = (bool) ($args['phone'] ?? true);
 $band   = (bool) ($args['band'] ?? false);
 ?>
@@ -26,7 +27,7 @@ $band   = (bool) ($args['band'] ?? false);
         <?php endif; ?>
         <p class="lead"><?php echo esc_html($lead); ?></p>
         <div class="advisor-cta__actions">
-            <a class="btn btn--gold" href="<?php echo esc_url(Config::BOOK_CALL_URL); ?>"><?php echo esc_html($button); ?><?php echo $title !== '' ? ' ' . mf_icon('i-arrow') : ''; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside mf_icon(). ?></a>
+            <a class="btn btn--gold" href="<?php echo esc_url($url); ?>"><?php echo esc_html($button); ?><?php echo $title !== '' ? ' ' . mf_icon('i-arrow') : ''; // phpcs:ignore WordPress.Security.EscapeOutput -- escaped inside mf_icon(). ?></a>
             <?php if ($phone) : ?>
                 <a class="btn btn--ghost" href="tel:+919004932221">+91 90049 32221</a>
             <?php endif; ?>
